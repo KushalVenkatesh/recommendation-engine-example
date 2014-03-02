@@ -1,5 +1,6 @@
 package com.aerospike.recommendation.rest;
 
+import java.net.UnknownHostException;
 import java.util.Properties;
 
 import javax.servlet.MultipartConfigElement;
@@ -17,16 +18,24 @@ import org.springframework.context.annotation.Configuration;
 
 import com.aerospike.client.AerospikeClient;
 import com.aerospike.client.AerospikeException;
+import com.mongodb.MongoClient;
 
 @Configuration
 @EnableAutoConfiguration
 @ComponentScan
-public class AerospikeRecommendationService {
+public class RecommendationService {
 	
 	@Bean
 	public AerospikeClient asClient() throws AerospikeException {
 		Properties as = System.getProperties();
-		return new AerospikeClient(as.getProperty("seedHost"), Integer.parseInt(as.getProperty("port")));
+		AerospikeClient aerospikeClient = new AerospikeClient(as.getProperty("seedHost"), Integer.parseInt(as.getProperty("port")));
+		return aerospikeClient;
+	}
+	@Bean
+	public MongoClient mongoClient() throws UnknownHostException {
+		Properties as = System.getProperties();
+		MongoClient mongoClient = new MongoClient(as.getProperty("seedHost"), Integer.parseInt(as.getProperty("port")));
+		return mongoClient;
 	}
 	@Bean
 	public MultipartConfigElement multipartConfigElement() {
@@ -38,8 +47,8 @@ public class AerospikeRecommendationService {
 	public static void main(String[] args) throws ParseException {
 
 		Options options = new Options();
-		options.addOption("h", "host", true, "Aerospike server hostname (default: localhost)");
-		options.addOption("p", "port", true, "Aerospike server port (default: 3000)");
+		options.addOption("h", "host", true, "Server hostname (default: localhost)");
+		options.addOption("p", "port", true, "Server port (default: 3000)");
 		options.addOption("n", "namespace", true, "Aerospike namespace (default: test)");
 
 		// parse the command line args
@@ -56,7 +65,7 @@ public class AerospikeRecommendationService {
 		as.put("namespace", nameSpace);
 
 		// start app
-		SpringApplication.run(AerospikeRecommendationService.class, args);
+		SpringApplication.run(RecommendationService.class, args);
 
 	}
 

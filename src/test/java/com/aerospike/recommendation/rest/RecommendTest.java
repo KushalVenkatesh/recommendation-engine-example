@@ -29,8 +29,8 @@ public class RecommendTest {
 		as.put("port", "3000");
 		as.put("namespace", "test");
 		// start app
-		ApplicationContext appCon = SpringApplication.run(AerospikeRecommendationService.class, new String[0]);
-		appCon.getBean(AerospikeRecommendationService.class);
+		ApplicationContext appCon = SpringApplication.run(RecommendationService.class, new String[0]);
+		appCon.getBean(RecommendationService.class);
 		RESTController controller = appCon.getBean(RESTController.class);
 		
 			controller.getRecommendationFor("15836679");

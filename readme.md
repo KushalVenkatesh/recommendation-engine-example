@@ -16,7 +16,11 @@ In each case you will need to go to the database and retrieve your data within 2
 You will build a simple recommendation RESTful web service with Spring Boot and Aerospike. 
 The recommendation service accepts an HTTP GET request:
 
-    http://localhost:8080/recommendation/{customer}
+    http://localhost:8080/aerospike/recommendation/{customer}
+    
+    	or
+    	
+    http://localhost:8080/mongo/recommendation/{customer}
 
 It responds with the following JSON array of recomendations:
 
@@ -73,10 +77,6 @@ It is easy to build a single runnable Jar with Maven
 ##Loading the test data
 Aerospike has the ability to backup and restore the data in an entire cluster. The test data for this application is stored as am Aerospike backup file. 
 
-Download the file at https://drive.google.com/a/aerospike.com/folderview?id=0B8luCpttpeaAVWZkYl85a2ktaXc&usp=sharing 
-and restore it to your Aerospike cluster using the following command:
-
-	asrestore -h 127.0.0.1 -p 3000 -d <back directory name>
 
 	
 ##Running the package

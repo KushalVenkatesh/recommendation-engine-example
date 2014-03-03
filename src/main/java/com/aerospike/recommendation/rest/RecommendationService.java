@@ -18,6 +18,8 @@ import org.springframework.context.annotation.Configuration;
 
 import com.aerospike.client.AerospikeClient;
 import com.aerospike.client.AerospikeException;
+import com.mongodb.DB;
+import com.mongodb.DBCollection;
 import com.mongodb.MongoClient;
 
 @Configuration
@@ -37,6 +39,26 @@ public class RecommendationService {
 		MongoClient mongoClient = new MongoClient(as.getProperty("seedHost"), Integer.parseInt(as.getProperty("port")));
 		return mongoClient;
 	}
+
+	@Bean
+	public DB mongoDB() throws UnknownHostException{
+		Properties as = System.getProperties();
+		DB db = mongoClient().getDB(as.getProperty("namespace"));
+		return db;		
+	}
+	
+	@Bean
+	public DBCollection movieCollection() throws UnknownHostException{
+		DBCollection movieCollection = mongoDB().getCollection(RESTController.PRODUCT_SET);
+		return movieCollection;
+	}
+	
+	@Bean
+	public DBCollection customerCollection() throws UnknownHostException{
+		DBCollection customerCollection = mongoDB().getCollection(RESTController.USERS_SET);
+		return customerCollection;
+	}
+	
 	@Bean
 	public MultipartConfigElement multipartConfigElement() {
 		return new MultipartConfigElement("");

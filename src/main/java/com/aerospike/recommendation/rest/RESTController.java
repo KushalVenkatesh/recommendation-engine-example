@@ -44,11 +44,14 @@ public class RESTController {
 	private static Logger log = Logger.getLogger(RESTController.class); 
 	@Autowired
 	AerospikeClient aerospikeClient;
+
 	@Autowired
 	MongoClient mongoClient;
-
+	@Autowired
 	private DB mongoDB;
+	@Autowired
 	private DBCollection movieCollection;
+	@Autowired
 	private DBCollection customerCollection;
 
 	static final String nameSpace;

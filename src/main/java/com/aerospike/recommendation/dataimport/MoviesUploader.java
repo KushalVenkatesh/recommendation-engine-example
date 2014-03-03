@@ -195,13 +195,7 @@ public class MoviesUploader {
 		
 		int count = 0, errors = 0;
 		for (WatchedRated wr : ratingList){
-//			try {
 				addMovieToMongoCustomer(wr);
-//				
-//				count++;
-//			} catch (AerospikeException e) {
-//				errors++;
-//			}
 		}
 		log.debug("Mongo Ratings " + ratingList.size() + " saved " + count + " with " + errors + " errors");
 	}

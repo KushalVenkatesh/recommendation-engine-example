@@ -42,8 +42,6 @@ public class RecommendationService {
 		return new MultipartConfigElement("");
 	}
 	
-	
-	
 	public static void main(String[] args) throws ParseException {
 
 		Options options = new Options();

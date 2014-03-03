@@ -19,6 +19,12 @@ import com.aerospike.client.AerospikeException;
 import com.aerospike.client.Key;
 import com.aerospike.client.Record;
 import com.aerospike.client.policy.Policy;
+import com.mongodb.BasicDBList;
+import com.mongodb.BasicDBObject;
+import com.mongodb.DB;
+import com.mongodb.DBCollection;
+import com.mongodb.DBCursor;
+import com.mongodb.MongoClient;
 
 @Controller
 public class RESTController {
@@ -37,7 +43,13 @@ public class RESTController {
 	public static final String CUSTOMER_WATCHED = "watched";
 	private static Logger log = Logger.getLogger(RESTController.class); 
 	@Autowired
-	AerospikeClient client;
+	AerospikeClient aerospikeClient;
+	@Autowired
+	MongoClient mongoClient;
+
+	private DB mongoDB;
+	private DBCollection movieCollection;
+	private DBCollection customerCollection;
 
 	static final String nameSpace;
 	static {
@@ -51,8 +63,8 @@ public class RESTController {
 	 * @throws Exception
 	 */
 	@SuppressWarnings("unchecked")
-	@RequestMapping(value="/recommendation/{customer}", method=RequestMethod.GET)
-	public @ResponseBody JSONArray getRecommendationFor(@PathVariable("customer") String customerID) throws Exception {
+	@RequestMapping(value="/aerospike/recommendation/{customer}", method=RequestMethod.GET)
+	public @ResponseBody JSONArray getAerospikeRecommendationFor(@PathVariable("customer") String customerID) throws Exception {
 		log.debug("Finding recomendations for " + customerID);
 		Policy policy = new Policy();
 
@@ -61,7 +73,7 @@ public class RESTController {
 		 */
 		Record thisUser = null;
 		try{
-			thisUser = client.get(policy, new Key(NAME_SPACE, USERS_SET, customerID));
+			thisUser = aerospikeClient.get(policy, new Key(NAME_SPACE, USERS_SET, customerID));
 			if (thisUser == null){
 				log.debug("Could not find user: " + customerID );
 				throw new CustomerNotFound(customerID);
@@ -95,7 +107,7 @@ public class RESTController {
 		 */
 		for (Map<String, Object> wr : customerWatched){
 			Key movieKey = new Key(NAME_SPACE, PRODUCT_SET, (String) wr.get(MOVIE_ID) );
-			Record movieRecord = client.get(policy, movieKey);
+			Record movieRecord = aerospikeClient.get(policy, movieKey);
 
 			List<Map<String, Object>> whoWatched = (List<Map<String, Object>>) movieRecord.getValue(WATCHED_BY);
 
@@ -111,7 +123,7 @@ public class RESTController {
 					if (!similarCustomerId.equals(customerID)) {
 						// find user with the highest similarity
 
-						Record similarCustomer = client.get(policy, new Key(NAME_SPACE, USERS_SET, similarCustomerId));
+						Record similarCustomer = aerospikeClient.get(policy, new Key(NAME_SPACE, USERS_SET, similarCustomerId));
 
 						List<Map<String, Object>> similarCustomerWatched = (List<Map<String, Object>>) similarCustomer.getValue(CUSTOMER_WATCHED);
 						double score = easySimilarity(thisCustomerMovieVector, similarCustomerWatched);
@@ -142,8 +154,8 @@ public class RESTController {
 			log.debug("Added Movie key: " + recomendedMovieKeys[index]);
 			index++;
 		}
-		Record[] recommendedMovies = client.get(policy, recomendedMovieKeys, TITLE, YEAR_OF_RELEASE);
-		
+		Record[] recommendedMovies = aerospikeClient.get(policy, recomendedMovieKeys, TITLE, YEAR_OF_RELEASE);
+
 		// This is a diagnostic step
 		if (log.isDebugEnabled()){
 			log.debug("Recomended Movies:");
@@ -151,7 +163,7 @@ public class RESTController {
 				log.debug(rec);
 			}
 		}
-		
+
 		// Turn the Aerospike records into a JSONArray
 		JSONArray recommendations = new JSONArray();
 		for (Record rec: recommendedMovies){
@@ -160,6 +172,118 @@ public class RESTController {
 		}
 		log.debug("Found these recomendations: " + recommendations);
 		return recommendations;
+	}
+	/**
+	 * get a recommendation for a specific customer
+	 * @param user a unique ID for a customer
+	 * @return
+	 * @throws Exception
+	 */
+	@SuppressWarnings("unchecked")
+	@RequestMapping(value="/mongo/recommendation/{customer}", method=RequestMethod.GET)
+	public @ResponseBody BasicDBList getMongoRecommendationFor(@PathVariable("customer") String customerID) throws Exception {
+		log.debug("Finding recomendations for " + customerID);
+
+		/* 
+		 * Get the customer's purchase history as a list of ratings
+		 */
+		BasicDBObject thisUser = null;
+		BasicDBObject whereQuery = new BasicDBObject();
+		whereQuery.put(CUSTOMER_ID, customerID);
+		thisUser = (BasicDBObject) customerCollection.findOne(whereQuery);
+		if (thisUser == null){
+			log.debug("Could not find user: " + customerID );
+			throw new CustomerNotFound(customerID);
+		}
+
+		/*
+		 * get the movies watched and rated
+		 */
+		List<Map<String, Object>> customerWatched = (List<Map<String, Object>>) thisUser.get(CUSTOMER_WATCHED);
+		if (customerWatched == null || customerWatched.size()==0){
+			// customer Hasen't Watched anything
+			log.debug("No movies found for customer: " + customerID );
+			throw new NoMoviesFound(customerID);
+		}
+
+		/*
+		 * build a vector list of movies watched
+		 */
+		List<Long> thisCustomerMovieVector = makeVector(customerWatched);
+
+
+		BasicDBObject bestMatchedCustomer = null;
+		double bestScore = 0;
+		/*
+		 * for each movie this customer watched, iterate
+		 * through the other customers that also watched
+		 * the movie 
+		 */
+		BasicDBObject movieRecord;
+		BasicDBObject movieQuery = new BasicDBObject();
+		BasicDBList jsonWatched;
+		
+		for (Map<String, Object> wr : customerWatched) {
+			movieQuery.put(MOVIE_ID, wr.get(MOVIE_ID));
+			movieRecord = (BasicDBObject) movieCollection.findOne(movieQuery);
+			
+
+			List<Map<String, Object>> whoWatched = (List<Map<String, Object>>) movieRecord.get(WATCHED_BY);
+
+			if (!(whoWatched == null)){
+				int end = Math.min(MOVIE_REVIEW_LIMIT, whoWatched.size()); 
+				/* 
+				 * Some movies are watched by >100k customers, only look at the last n movies, or the 
+				 * number of customers, whichever is smaller
+				 */
+				for (int index = 0; index < end; index++){
+					Map<String, Object> watchedBy = whoWatched.get(index);
+					String similarCustomerId = (String) watchedBy.get(CUSTOMER_ID);
+					if (!similarCustomerId.equals(customerID)) {
+						// find user with the highest similarity
+						BasicDBObject similarCustomerQuery = new BasicDBObject();
+						whereQuery.put(CUSTOMER_ID, similarCustomerId);
+						BasicDBObject similarCustomer = (BasicDBObject) customerCollection.findOne(similarCustomerQuery);
+
+						List<Map<String, Object>> similarCustomerWatched = (List<Map<String, Object>>) similarCustomer.get(CUSTOMER_WATCHED);
+						double score = easySimilarity(thisCustomerMovieVector, similarCustomerWatched);
+						if (score > bestScore){
+							bestScore = score;
+							bestMatchedCustomer = similarCustomer;
+						}
+					}
+				}
+			}
+		}
+		log.debug("Best customer: " + bestMatchedCustomer);
+		log.debug("Best score: " + bestScore);
+		// return the best matched user's purchases as the recommendation
+		List<Integer> bestMatchedPurchases = new ArrayList<Integer>();
+		for (Map<String, Object> watched : (List<Map<String, Object>>)bestMatchedCustomer.get(CUSTOMER_WATCHED)){
+			Integer movieID = Integer.parseInt((String) watched.get(MOVIE_ID));
+			if ((!thisCustomerMovieVector.contains(movieID))&&(movieID != null)){
+				bestMatchedPurchases.add(movieID);
+			}
+		}
+
+		// get the movies
+		BasicDBList recommendedMovies = new BasicDBList();
+		BasicDBObject inQuery = new BasicDBObject();
+		inQuery.put(MOVIE_ID, new BasicDBObject("$in", bestMatchedPurchases));
+		DBCursor cursor = movieCollection.find(inQuery);
+		while(cursor.hasNext()) {
+			recommendedMovies.add(cursor.next());
+		}
+
+		// This is a diagnostic step
+		if (log.isDebugEnabled()){
+			log.debug("Recomended Movies:");
+			for (Object rec : recommendedMovies){
+				log.debug(rec);
+			}
+		}
+
+		return recommendedMovies;
 	}
 	/**
 	 * Produces a Integer vector from the movie IDs
@@ -194,7 +318,7 @@ public class RESTController {
 		 * You could use any similarity algorithm you wish
 		 */
 		List<Long> similarCustomerVector = makeVector(similarCustomerWatched);
-		
+
 		return CosineSimilarity.cosineSimilarity(thisCustomerVector, similarCustomerVector);
 	}
 

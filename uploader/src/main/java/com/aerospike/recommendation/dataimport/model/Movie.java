@@ -168,14 +168,16 @@ public class Movie implements IRecord {
 		this.movieId = (String) json.get(MOVIE_ID);
 		this.yearOfRelease =  (Long) json.get(YEAR_OF_RELEASE);
 		this.title = (String) json.get(TITLE);
-//		this.sumOfRatings = (Integer) json.get(SUM_OF_RATINGS);
-//		this.countOfRatings = (Integer) json.get(COUNT_OF_RATINGS);
+		//		this.sumOfRatings = (Integer) json.get(SUM_OF_RATINGS);
+		//		this.countOfRatings = (Integer) json.get(COUNT_OF_RATINGS);
 		this.watchedBy = new ArrayList<WatchedRated>();
 		JSONArray watched = (JSONArray) json.get(WATCHED_BY);
-		for (Object obj : watched){
-			JSONObject wr = (JSONObject) obj;
-			WatchedRated watchedRated = new WatchedRated(wr);
-			add(watchedRated);
+		if (watched != null){
+			for (Object obj : watched){
+				JSONObject wr = (JSONObject) obj;
+				WatchedRated watchedRated = new WatchedRated(wr);
+				add(watchedRated);
+			}
 		}
 	}
 }

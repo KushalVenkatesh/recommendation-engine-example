@@ -39,7 +39,6 @@ import com.mongodb.WriteConcern;
 public class MoviesUploader {
 	private static Logger log = Logger.getLogger(MoviesUploader.class);
 
-	public static final String MOVIE_DIR = "resources/movies";
 	private static AerospikeClient aerospikeClient;
 	private static WritePolicy writePolicy;
 	private static String namespace;
@@ -65,6 +64,7 @@ public class MoviesUploader {
 		options.addOption("n", "namespace", true, "Namespace (default: test)");
 		options.addOption("db", "database", true, "Database: aero, mongo, both");
 		options.addOption("l", "limit", true, "Limit the number of movies uploaded");
+		options.addOption("m", "movies", true, "Movie file directory");
 		options.addOption("u", "usage", false, "Print usage.");
 
 		CommandLineParser parser = new PosixParser();
@@ -113,7 +113,7 @@ public class MoviesUploader {
 			customerCollection = mongoDB.getCollection(Customer.USERS_SET);
 			movieCollection = mongoDB.getCollection(Movie.PRODUCT_SET);
 		}
-		File ratingDir = new File(MOVIE_DIR);
+		File ratingDir = new File(cl.getOptionValue("m","movies"));
 		File completed = new File(ratingDir.getAbsolutePath() + "/completed");
 		if (!completed.exists()){
 			completed.mkdirs();
@@ -160,7 +160,7 @@ public class MoviesUploader {
 			log.error("Aerospike Error", e);
 		}
 		
-		log.info("Successfully processed " + file.getName());
+		log.info("Processed " + file.getName());
 
 	}
 
@@ -177,6 +177,8 @@ public class MoviesUploader {
 				ratings.push(Value.getAsMap(wr));
 				count++;
 			} catch (AerospikeException e) {
+				log.error(e.getMessage());
+				log.debug(e.getMessage(), e);
 				errors++;
 			}
 		}

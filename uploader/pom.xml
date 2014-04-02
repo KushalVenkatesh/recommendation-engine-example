@@ -54,6 +54,7 @@
 			<artifactId>log4j</artifactId>
 			<version>1.2.14</version>
 		</dependency>
+		<!-- Simple JSON -->
 		<dependency>
 			<groupId>com.googlecode.json-simple</groupId>
 			<artifactId>json-simple</artifactId>
@@ -118,29 +119,6 @@
 					<groupId>org.eclipse.m2e</groupId>
 					<artifactId>lifecycle-mapping</artifactId>
 					<version>1.0.0</version>
-					<configuration>
-						<lifecycleMappingMetadata>
-							<pluginExecutions>
-								<pluginExecution>
-									<pluginExecutionFilter>
-										<groupId>org.antlr</groupId>
-										<artifactId>
-											antlr3-maven-plugin
-										</artifactId>
-										<versionRange>
-											[3.5.1,)
-										</versionRange>
-										<goals>
-											<goal>antlr</goal>
-										</goals>
-									</pluginExecutionFilter>
-									<action>
-										<ignore></ignore>
-									</action>
-								</pluginExecution>
-							</pluginExecutions>
-						</lifecycleMappingMetadata>
-					</configuration>
 				</plugin>
 			</plugins>
 		</pluginManagement>

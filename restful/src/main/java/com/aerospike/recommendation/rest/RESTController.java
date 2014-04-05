@@ -18,6 +18,7 @@ import com.aerospike.client.AerospikeClient;
 import com.aerospike.client.AerospikeException;
 import com.aerospike.client.Key;
 import com.aerospike.client.Record;
+import com.aerospike.client.large.LargeStack;
 import com.aerospike.client.policy.Policy;
 import com.mongodb.BasicDBList;
 import com.mongodb.BasicDBObject;
@@ -60,7 +61,7 @@ public class RESTController {
 		nameSpace = (String) as.get("namespace");
 	}
 	/**
-	 * get a recommendation for a specific customer
+	 * get a recommendation for a specific customer from Aerospike
 	 * @param user a unique ID for a customer
 	 * @return
 	 * @throws Exception
@@ -88,27 +89,31 @@ public class RESTController {
 		/*
 		 * get the movies watched and rated
 		 */
-		List<Map<String, Object>> customerWatched = (List<Map<String, Object>>) thisUser.getValue(CUSTOMER_WATCHED);
+		LargeStack customerWatched = aerospikeClient.getLargeStack(new Policy(), 
+				new Key(NAME_SPACE, USERS_SET, customerID), 
+				CUSTOMER_WATCHED, null);
 		if (customerWatched == null || customerWatched.size()==0){
 			// customer Hasen't Watched anything
 			log.debug("No movies found for customer: " + customerID );
 			throw new NoMoviesFound(customerID);
 		}
 
+		List<Map<String, Object>> customerWatchedList = (List<Map<String, Object>>) customerWatched.peek(MOVIE_REVIEW_LIMIT);
 		/*
 		 * build a vector list of movies watched
 		 */
-		List<Long> thisCustomerMovieVector = makeVector(customerWatched);
+		List<Long> thisCustomerMovieVector = makeVector(customerWatchedList);
 
 
 		Record bestMatchedCustomer = null;
+		List<Map<String, Object>> bestMatchedList = null;
 		double bestScore = 0;
 		/*
 		 * for each movie this customer watched, iterate
 		 * through the other customers that also watched
 		 * the movie 
 		 */
-		for (Map<String, Object> wr : customerWatched){
+		for (Map<String, Object> wr : customerWatchedList){
 			Key movieKey = new Key(NAME_SPACE, PRODUCT_SET, (String) wr.get(MOVIE_ID) );
 			Record movieRecord = aerospikeClient.get(policy, movieKey);
 
@@ -127,12 +132,17 @@ public class RESTController {
 						// find user with the highest similarity
 
 						Record similarCustomer = aerospikeClient.get(policy, new Key(NAME_SPACE, USERS_SET, similarCustomerId));
+						LargeStack similarCustomerWatched = aerospikeClient.getLargeStack(new Policy(), 
+								new Key(NAME_SPACE, USERS_SET, similarCustomerId), 
+								CUSTOMER_WATCHED, null);
 
-						List<Map<String, Object>> similarCustomerWatched = (List<Map<String, Object>>) similarCustomer.getValue(CUSTOMER_WATCHED);
-						double score = easySimilarity(thisCustomerMovieVector, similarCustomerWatched);
+						List<Map<String, Object>> similarCustomerWatchedList = (List<Map<String, Object>>) similarCustomerWatched.peek(MOVIE_REVIEW_LIMIT);
+						
+						double score = easySimilarity(thisCustomerMovieVector, similarCustomerWatchedList);
 						if (score > bestScore){
 							bestScore = score;
 							bestMatchedCustomer = similarCustomer;
+							bestMatchedList = similarCustomerWatchedList;
 						}
 					}
 				}
@@ -142,7 +152,7 @@ public class RESTController {
 		log.debug("Best score: " + bestScore);
 		// return the best matched user's purchases as the recommendation
 		List<Integer> bestMatchedPurchases = new ArrayList<Integer>();
-		for (Map<String, Object> watched : (List<Map<String, Object>>)bestMatchedCustomer.getValue(CUSTOMER_WATCHED)){
+		for (Map<String, Object> watched : bestMatchedList){
 			Integer movieID = Integer.parseInt((String) watched.get(MOVIE_ID));
 			if ((!thisCustomerMovieVector.contains(movieID))&&(movieID != null)){
 				bestMatchedPurchases.add(movieID);
@@ -177,7 +187,7 @@ public class RESTController {
 		return recommendations;
 	}
 	/**
-	 * get a recommendation for a specific customer
+	 * get a recommendation for a specific customer from MongoDB
 	 * @param user a unique ID for a customer
 	 * @return
 	 * @throws Exception

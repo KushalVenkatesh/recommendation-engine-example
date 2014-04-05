@@ -54,6 +54,8 @@ public class MoviesUploader {
 	private static DB mongoDB;
 	private static DBCollection movieCollection;
 	private static DBCollection customerCollection;
+
+	private static Policy policy = new Policy();
 	
 
 
@@ -74,6 +76,7 @@ public class MoviesUploader {
 			logUsage(options);
 			return;
 		}
+		policy.timeout = 0;
 		int limit = 0;
 		String host = cl.getOptionValue("h", "127.0.0.1");
 		String portString = cl.getOptionValue("p", "3000");
@@ -137,17 +140,17 @@ public class MoviesUploader {
 		}
 		log.info("Completed " + counter + " with " + errors + " errors");
 	}
-	@SuppressWarnings("unchecked")
 	private static void processRatingFile(File file) throws IOException, AerospikeException, ParseException {
 		if (!checkFileExists(file)) return;
-		Policy policy = new Policy();
-		policy.timeout = 0;
+		log.info("Starting " + file.getName());
+		
 		JSONParser parser = new JSONParser();
 
 		Object obj = parser.parse(new FileReader(file));
 		JSONObject jsonMovie = (JSONObject) obj;
 
 		Movie movie = new Movie(jsonMovie);
+		log.info("Processing " + movie.getTitle() + " watched by: " + movie.getWatchedBy().size());
 		movie.sortWatched();
 		try {
 			if (aero)
@@ -235,16 +238,16 @@ public class MoviesUploader {
 
 		customer = new Customer(customerID);
 		if (!aerospikeClient.exists(writePolicy, 
-				customer.getKey(namespace, Customer.USERS_SET))){
+				customer.getKey(namespace, customerSet))){
 			aerospikeClient.put(writePolicy, 
-					customer.getKey(namespace, Customer.USERS_SET), 
+					customer.getKey(namespace, customerSet), 
 					new Bin(Customer.CUSTOMER_ID, Value.get(customerID)));
 			log.trace("New customer id: " + customerID);
 		}
 
 		// create rated stack
 		LargeStack customerRatingStack = aerospikeClient.getLargeStack(writePolicy, 
-				customer.getKey(namespace, Customer.USERS_SET), 
+				customer.getKey(namespace, customerSet), 
 				Customer.WATCHED, null);
 		// Add rated movie to stack
 		customerRatingStack.push(Value.getAsMap(wr));

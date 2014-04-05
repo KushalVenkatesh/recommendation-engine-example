@@ -2,7 +2,6 @@
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<artifactId>aerospike-recommendation-restful-service</artifactId>
-	<version>1.0.0</version>
 	<name>Simple Recommendation Engine</name>
 	<description>This is a simple recommendation engine using a RESTful web service using Spring Boot and Aerospike</description>
 	<parent>

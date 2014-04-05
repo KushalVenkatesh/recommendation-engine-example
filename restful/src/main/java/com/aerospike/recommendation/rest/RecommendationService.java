@@ -70,7 +70,8 @@ public class RecommendationService {
 		options.addOption("h", "host", true, "Server hostname (default: localhost)");
 		options.addOption("p", "port", true, "Server port (default: 3000)");
 		options.addOption("n", "namespace", true, "Aerospike namespace (default: test)");
-
+		options.addOption("db", "database", true, "Database: aero, mongo, both");
+		
 		// parse the command line args
 		CommandLineParser parser = new PosixParser();
 		CommandLine cl = parser.parse(options, args, false);
@@ -83,6 +84,8 @@ public class RecommendationService {
 		as.put("port", portString);
 		String nameSpace = cl.getOptionValue("n", "test");
 		as.put("namespace", nameSpace);
+		String dataBase = cl.getOptionValue("db", "database");
+		as.put("dataBase", dataBase);
 
 		// start app
 		SpringApplication.run(RecommendationService.class, args);

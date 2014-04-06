@@ -115,18 +115,18 @@ public class RESTController {
 		 */
 		for (Map<String, Object> wr : customerWatchedList){
 			Key movieKey = new Key(NAME_SPACE, PRODUCT_SET, (String) wr.get(MOVIE_ID) );
-			Record movieRecord = aerospikeClient.get(policy, movieKey);
+			LargeStack whoWatched = aerospikeClient.getLargeStack(new Policy(), 
+					movieKey, 
+					WATCHED_BY+"List", null);
+			/* 
+			 * Some movies are watched by >100k customers, only look at the last n movies, or the 
+			 * number of customers, whichever is smaller
+			 */
+			
+			List<Map<String, Object>> whoWatchedList = (List<Map<String, Object>>)whoWatched.peek(Math.min(MOVIE_REVIEW_LIMIT, whoWatched.size()));
 
-			List<Map<String, Object>> whoWatched = (List<Map<String, Object>>) movieRecord.getValue(WATCHED_BY);
-
-			if (!(whoWatched == null)){
-				int end = Math.min(MOVIE_REVIEW_LIMIT, whoWatched.size()); 
-				/* 
-				 * Some movies are watched by >100k customers, only look at the last n movies, or the 
-				 * number of customers, whichever is smaller
-				 */
-				for (int index = 0; index < end; index++){
-					Map<String, Object> watchedBy = whoWatched.get(index);
+			if (!(whoWatchedList == null)){
+				for (Map<String, Object> watchedBy : whoWatchedList){
 					String similarCustomerId = (String) watchedBy.get(CUSTOMER_ID);
 					if (!similarCustomerId.equals(customerID)) {
 						// find user with the highest similarity

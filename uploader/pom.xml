@@ -33,7 +33,7 @@
 		<dependency>
 			<groupId>com.aerospike</groupId>
 			<artifactId>aerospike-client</artifactId>
-			<version>3.0.22</version>
+			<version>3.0.23</version>
 		</dependency>
 		<!-- MongoDB driver. -->
 		<dependency>

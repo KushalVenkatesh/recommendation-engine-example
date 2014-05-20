@@ -11,11 +11,15 @@ The **Aerospike** database is used as the storage engine, and is a good fit. Aer
 ##What you will build
 This guide will take you through accessing the Github repository containing the project, and creating a simple recommendation service. The provided engine will use Similarity Vectors to recommend a product - in the case of the example data set, movies - to a customer. The algorithm for this is very elementary, and will provide a starting point for real-time recommendation research, but also will provide recommendations based on the demonstration data provided.
 
-To provide a recommendation in real-time, you will need a database that can retrieve your data very quickly, because several database requests will be necessary to do the full recommendation. If your database is too slow, you will easily find - even over reasonable data sets - that the recommendation time is slow. You could try this with any database, but we recommend the Aerospike NoSQL database - it is very fast (1- 5ms latency per request) and the latency remains flat as the transaction rate grows.
+To provide a recommendation in real-time, you will need a database that can retrieve your data very quickly, because several database requests will be necessary to do the full recommendation. If your database is too slow, you will easily find - even over reasonable data sets - that the recommendation time is slow. You could try this with any database, in this exercise we will use both the Aerospike NoSQL database  and the MongoDB data base. This will allow us to evaluate the merits of both NoSQL databases.
 
 You will build a service that accepts an HTTP GET request:
 
-	http://localhost:8080/recommmendation/{user}
+	http://localhost:8080/aerospike/recommmendation/{user}
+
+or
+
+	http://localhost:8080/mongo/recommmendation/{user}
 
 It responds with the following JSON array of recommendations:
 ```json
@@ -86,17 +90,17 @@ The Movie record consists of some details about the movie e.g. Title and Year of
 
 Move ID (primary key) | YearOfRelease | Title | WATCHED_BY | Rating
 ----------------------|---------------|-------|------------|-------
-String | String | String | Large Stack of Ratings | Integer
+String | String | String | Large Stack of Ratings (Aerospike), List (MongoDB) | Integer
 
 ###Customers
 The Customer record has a customer ID and a List of movies watched and rated. It could contain additional attributes about the customer, but for this example it simply contains a list of ratings.
 
 Customer ID (primary key) | MOVIES_WATCHED
 --------------------------|---------------
-String | Large Stack of Ratings
+String | Large Stack of Ratings (Aerospike), List (MongoDB)
 
-###Large Data Types (LDTs)
-What are [LDTs](https://docs.aerospike.com/pages/viewpage.action?pageId=3807106) exactly? Large Data Types allow individual record bins to contain collections of hundreds of thousands of objects (or documents), and they allow these collections to be efficiently stored and processed in-database.  The Aerospike LDT Feature exploits the Aerospike User-Defined Functions mechanism and a new record container type, which we refer to as "sub-records".  Sub-records are very similar to regular Aerospike records, with the main exception that they are linked to a parent record.  They share the same partition address and internal record lock as the parent record, so they move with their parent record during migrations and they are protected under the same isolation mechanism as their parent record.
+###Aerospike Large Data Types (LDTs)
+What are [LDTs](https://docs.aerospike.com/pages/viewpage.action?pageId=3807106) exactly? Unique to Aerospike, Large Data Types allow individual record bins to contain collections of hundreds of thousands of objects (or documents), and they allow these collections to be efficiently stored and processed in-database.  The Aerospike LDT Feature exploits the Aerospike User-Defined Functions mechanism and a new record container type, which we refer to as "sub-records".  Sub-records are very similar to regular Aerospike records, with the main exception that they are linked to a parent record.  They share the same partition address and internal record lock as the parent record, so they move with their parent record during migrations and they are protected under the same isolation mechanism as their parent record.
 
 Aerospike large objects are not stored contiguously with the associated record, but instead are split into sub-records (with sizes ranging roughly from 2kb to 32kb), as shown in Figure 1.  The sub-records are indexed and linked together, and managed in-database via User Defined Functions (UDFs). The use of sub-records means that access to an LDT instance typically affects only a single sub-record, rather than the entire record bin value. 
 
@@ -136,11 +140,11 @@ This is a **very elementary** technique and it is useful only as an illustration
 
 ##Setup the project
 As this project is written in Java and using the Spring framework with Aerospike, you need Java and the Aerospike Java client installed. We use [Maven](https://www.google.com/url?q=https%3A%2F%2Fmaven.apache.org%2F&sa=D&sntz=1&usg=AFQjCNEeDpKe4dgXLJx95yPQ8bGMJ9HR-A) to build the project, which also must be installed. If you are unfamiliar with Maven refer to the Spring guide: [Building Java Projects with Maven](http://spring.io/guides/gs/maven).
-###Step 1: Install Maven and the Aerospike Java client
+###Step 1: Install Maven, the Aerospike Java client and the MongoDB Java client
 
 Follow the instructions to [Install Maven](http://maven.apache.org/guides/getting-started/maven-in-five-minutes.html) your development machine.
 
-You will also need to build and install the [Aerospike Java client](https://docs.aerospike.com/display/V3/Java+Client+-+Installation) into your local Maven repository.  
+The [Aerospike Java client](https://docs.aerospike.com/display/V3/Java+Client+-+Installation) and the MongoDB Java client will be installed on your local machine as part of the Maven build.  
 
 ###Step 2: Clone the project git repository
 
@@ -148,84 +152,131 @@ All the source code for this example is a GitHub [here](https://github.com/aeros
 ```bash
 git clone https://github.com/aerospike/recommendation-engine-example
 ```
-###Step 3: Install Aerospike and load the test data
-The test data for this application is stored as an Aerospike database file. Rather than going through the process of uploading data from a CSV file, I created a “single node” Aerospike cluster and loaded the data, then saved a copy of the database file. This means that you can start with a fully loaded database.
 
+###Step 3: Build with maven
+
+The Maven pom.xml will package the service into a single jar. Use the command:
+```bash
+mvn clean package
+```
+Maven will download all the dependencies (Spring Boot, Commons CLI, Log4j, Simple JSON) and install them in your local Maven repository. Then it will build and package the application as a stand-alone runnable jar with 2 modes of operation:
+
+ - A web service application including an instance of Tomcat, so you can simply run the jar without installing it in an Application Server.
+ - A data uploader that wil upload movie data to Aerospike, MongoDB or both
+
+###Step 4: Install Aerospike and/or MongoDB
 Setting up an Aerospike single node cluster is easy. Aerospike only runs on Linux, so to develop on my Mac I use one or more virtual machines. I use VMware Fusion, but you can just as easily use Open Virtual Machine Tools, or your favorite VM software.
 
 Create a single Linux VM (I use CentOS)
 
 Install Aerospike 3 using the instructions [Install a Single Node](https://docs.aerospike.com/display/V3/Install+a+Single+Node) at the Aerospike web site.
 
-***RE WRITE THIS***
-Download the file movie-data.zip to the node that you have installed Aerospike. You can also use the command: 
-```bash
-wget https://docs.google.com/uc?export=download&id=0B8luCpttpeaAOGtMUUhUbThXSFU
-```
-Un-tar the archive with 
-```bash
-tar -xvf movie-data.zip
-```
-and you will find two files:
-aerospike.conf
-test.data
+Install MongoDB using the instructions [Install MongoDB]() at the MongoDB web site.
 
-Be sure that Aerospike is not running by entering the command on your Linux machine:
+###Step 5:
+The test data is included in the directory `movies`. Each file contains a movie ant its ratings in JSON format. You can load all the movies or just a few. To load the data, run the JAR with the following options:
 ```bash
-sudo /etc/init.d/aerospike stop
+java -jar aerospike-recommendation-restful-service-0.5.0.M4.jar -m \<movies\>
 ```
-Copy the file: aerospike.conf to /etc/aerospike/aerospike.conf on the Linux machine that you have installed your single node cluster.
+- -m is the movie directory
+- -l is the number of movies to load (default: 0 means all the movies)
 
-Copy the file: test.data to /var/data/serospike/test.data on your Linux machine. This is the database file containing the data. The aerospike.conf file is a configuration file that defines a namespace called “test” that persists its data in /var/data/aerospike/test.data.
-
-###Step 4: Start Aerospike and confirm the test data is loaded
-Start Aerospike with:
-```bash
-sudo /etc/init.d/aerospike  start
-```
-Confirm that Aerospike started OK with
-```bash
-sudo /etc/init.d/aerospike status
-```
-Confirm that the data is in place by using the Aerospike AQL utility. AQL is a SQL-like language that allows you to declaratively manipulate data in Aerospike 3.
-```bash
-sudo aql
-```
-At the AQL prompt:
-```sql
-show sets
-```
-The output will look like this:
-```sql
-aql> show sets
-+-----------+----------------+----------------------+---------+-------------------+------------+---------------------+
-| n_objects | set-enable-xdr | set-stop-write-count | ns_name | set_name          | set-delete | set-evict-hwm-count |
-+-----------+----------------+----------------------+---------+-------------------+------------+---------------------+
-| 24        | "use-default"  | 0                    | "test"  | "MOVIE_TITLES"    | "false"    | 0                   |
-| 36877     | "use-default"  | 0                    | "test"  | "MOVIE_CUSTOMERS" | "false"    | 0                   |
-+-----------+----------------+----------------------+---------+-------------------+------------+---------------------+
-2 rows in set (0.001 secs)
-```
-###Step 5: Build with maven
-
-The Maven pom.xml will package the service into a single jar. Use the command:
-```bash
-mvn package -DskipTests
-```
-Maven will download all the dependencies (Spring Boot, Commons CLI, Log4j, Simple JSON) and install them in your local Maven repository. Then it will build and package the code into a stand-alone web service application packaged into a runnable jar file. This jar file includes an instance of Tomcat, so you can simply run the jar without installing it in an Application Server.
 
 ###Step 6: Running the Service
 
 At the command prompt, enter the following command to run the packaged application. This application will open the REST service at port 8080.
 ```bash
-java -jar aerospike-recommendation-example-1.0.0.jar
+java -jar aerospike-recommendation-restful-service-0.5.0.M4.jar
 ```
 Then, in a browser, enter the URL:
 ```
-http://localhost:8080/recommendation/15836679
+http://localhost:8080/aerospike/recommendation/15836679
 ```
 The result should be like this:
 
 ![Results](Results.png)
 
-##Code discussionThe most interesting part of the code is the method: getRecommendation() in the class RESTController.```javapublic @ResponseBody JSONArray getRecommendationFor(@PathVariable("customer") String customerID) throws Exception {	. . . }```This method processes a REST request and responds with a JSON object that contains recommended movies.The customer ID supplied in the REST request is used as the key to retrieve the customer record.```javathisUser = client.get(policy, new Key(NAME_SPACE, USERS_SET, customerID));```Once we have the customer record, we make a vector from the the list of movies watched.```javaList<Long> thisCustomerMovieVector = makeVector(customerWatched);```This vector is simply a list of long integers. We will use this vector in our similarity comparisons.We then iterate through the movies that the customer has watched, and build a list of customers that have watched these movies, and find the most similar customer using Cosine Similarity:```javafor (Map<String, Object> wr : customerWatched){…Record movieRecord = client.get(policy, movieKey);...iterate through list people who watched this movie...List<Map<String, Object>> whoWatched = (List<Map<String, Object>>) movieRecord.getValue(WATCHED_BY);...For each customer who watched this movie, check their similarity, and record the highest similarity.... Record similarCustomer = client.get(policy, new Key(NAME_SPACE, USERS_SET, similarCustomerId));List<Map<String, Object>> similarCustomerWatched = (List<Map<String, Object>>)similarCustomer.getValue(CUSTOMER_WATCHED);double score = easySimilarity(thisCustomerMovieVector, similarCustomerWatched);if (score > bestScore){   bestScore = score;   bestMatchedCustomer = similarCustomer;}```Having completed iterating through the list of similar customers you will have the customer with the highest similarity score. We then get the movies that this customer has watched ```java// get the moviesKey[] recomendedMovieKeys = new Key[bestMatchedPurchases.size()];int index = 0;for (int recomendedMovieID : bestMatchedPurchases){recomendedMovieKeys[index] = new Key(NAME_SPACE, PRODUCT_SET,String.valueOf(recomendedMovieID));    log.debug("Added Movie key: " + recomendedMovieKeys[index]);    index++;}Record[] recommendedMovies = client.get(policy, recomendedMovieKeys, TITLE, YEAR_OF_RELEASE);```and return them into a JSON object and return it in the request body.```java// Turn the Aerospike records into a JSONArrayJSONArray recommendations = new JSONArray();for (Record rec: recommendedMovies){   if (rec != null)            recommendations.add(new JSONRecord(rec));   }log.debug("Found these recomendations: " + recommendations);return recommendations;```##SummaryCongratulations! You have just developed a simple recommendation engine, housed in a RESTful service using Spring and Aerospike. 
+##Code discussion
+
+###AerospikeThe most interesting part of the code is the method: getRecommendation() in the class RESTController.```javapublic @ResponseBody JSONArray getRecommendationFor(@PathVariable("customer") String customerID) throws Exception {	. . . }```This method processes a REST request and responds with a JSON object that contains recommended movies.The customer ID supplied in the REST request is used as the key to retrieve the customer record.```javathisUser = client.get(policy, new Key(NAME_SPACE, USERS_SET, customerID));```Once we have the customer record, we get a list of movies that they have watched. This list is limited by the constant `MOVIE_REVIEW_LIMIT`. 
+```java
+/*
+ * get the movies watched and rated
+ */
+LargeStack customerWatched = aerospikeClient.getLargeStack(new Policy(), 
+		new Key(NAME_SPACE, USERS_SET, customerID), 
+		CUSTOMER_WATCHED, null);
+if (customerWatched == null || customerWatched.size()==0){
+	// customer Hasen't Watched anything
+	log.debug("No movies found for customer: " + customerID );
+	throw new NoMoviesFound(customerID);
+}
+
+List<Map<String, Object>> customerWatchedList = 
+			(List<Map<String, Object>>)customerWatched.peek(MOVIE_REVIEW_LIMIT);
+
+```
+Then we make a vector from the the list of movies watched.```javaList<Long> thisCustomerMovieVector = makeVector(customerWatchedList);```This vector is simply a list of long integers. We will use this vector in our similarity comparisons.We then iterate through the movies that the customer has watched, and build a list of customers that have watched these movies, and find the most similar customer using Cosine Similarity:```java/*
+ * for each movie this customer watched, iterate
+ * through the other customers that also watched
+ * the movie 
+ */
+for (Map<String, Object> wr : customerWatchedList){
+	Key movieKey = new Key(NAME_SPACE, PRODUCT_SET, (String) wr.get(MOVIE_ID) );
+	LargeStack whoWatched = aerospikeClient.getLargeStack(new Policy(), 
+			movieKey, 
+			WATCHED_BY+"List", null);
+	/* 
+	 * Some movies are watched by >100k customers, only look at the last n movies, or the 
+	 * number of customers, whichever is smaller
+	 */
+			
+	List<Map<String, Object>> whoWatchedList = (List<Map<String, Object>>)whoWatched.peek(Math.min(MOVIE_REVIEW_LIMIT, whoWatched.size()));
+
+	if (!(whoWatchedList == null)){
+		for (Map<String, Object> watchedBy : whoWatchedList){
+			String similarCustomerId = (String) watchedBy.get(CUSTOMER_ID);
+			if (!similarCustomerId.equals(customerID)) {
+				// find user with the highest similarity
+
+				Record similarCustomer = 
+					aerospikeClient.get(policy, new Key(NAME_SPACE, USERS_SET, similarCustomerId));
+				LargeStack similarCustomerWatched = 
+					aerospikeClient.getLargeStack(new Policy(), 
+						new Key(NAME_SPACE, USERS_SET, similarCustomerId), 
+						CUSTOMER_WATCHED, null);
+
+				List<Map<String, Object>> similarCustomerWatchedList =
+					(List<Map<String, Object>>)similarCustomerWatched.peek(MOVIE_REVIEW_LIMIT);
+						
+				double score = easySimilarity(thisCustomerMovieVector, similarCustomerWatchedList);
+				if (score > bestScore){
+					bestScore = score;
+					bestMatchedCustomer = similarCustomer;
+					bestMatchedList = similarCustomerWatchedList;
+				}
+			}
+		}
+	}
+}
+```Having completed iterating through the list of similar customers you will have the customer with the highest similarity score. We then get the movies that this customer has watched ```java// get the movies
+Key[] recomendedMovieKeys = new Key[bestMatchedPurchases.size()];
+int index = 0;
+for (int recomendedMovieID : bestMatchedPurchases){
+	recomendedMovieKeys[index] = new Key(NAME_SPACE, PRODUCT_SET, String.valueOf(recomendedMovieID));
+	log.debug("Added Movie key: " + recomendedMovieKeys[index]);
+	index++;
+}
+Record[] recommendedMovies = aerospikeClient.get(policy, recomendedMovieKeys, TITLE, YEAR_OF_RELEASE);
+```and return them into a JSON object and return it in the request body.```java// Turn the Aerospike records into a JSONArray
+JSONArray recommendations = new JSONArray();
+for (Record rec: recommendedMovies){
+	if (rec != null)
+		recommendations.add(new JSONRecord(rec));
+}
+log.debug("Found these recomendations: " + recommendations);
+return recommendations;
+```
+###MongoDB
+
+TO DO##SummaryCongratulations! You have just developed a simple recommendation engine, housed in a RESTful service using Spring and Aerospike. 

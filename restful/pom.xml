@@ -4,11 +4,6 @@
 	<artifactId>aerospike-recommendation-restful-service</artifactId>
 	<name>Simple Recommendation Engine</name>
 	<description>This is a simple recommendation engine using a RESTful web service using Spring Boot and Aerospike</description>
-<!-- <parent>
-		<groupId>com.aerospike</groupId>
-		<artifactId>recommendation</artifactId>
-		<version>1.0.0</version>
-	</parent>  -->	
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
@@ -82,29 +77,6 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 				<version>0.5.0.M1</version>
-			</plugin>
-			<plugin>
-				<artifactId>maven-assembly-plugin</artifactId>
-				<configuration>
-					<descriptorRefs>
-						<descriptorRef>jar-with-dependencies</descriptorRef>
-					</descriptorRefs>
-					<archive>
-						<manifest>
-							<addClasspath>true</addClasspath>
-							<mainClass>com.aerospike.recommendation.rest.RecommendationService</mainClass>
-						</manifest>
-					</archive>
-				</configuration>
-				<executions>
-					<execution>
-						<id>make-my-jar-with-dependencies</id>
-						<phase>package</phase>
-						<goals>
-							<goal>single</goal>
-						</goals>
-					</execution>
-				</executions>
 			</plugin>
 		</plugins>
 		<resources>

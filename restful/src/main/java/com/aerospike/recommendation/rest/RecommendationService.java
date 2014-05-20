@@ -1,15 +1,23 @@
 package com.aerospike.recommendation.rest;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.net.UnknownHostException;
 import java.util.Properties;
 
 import javax.servlet.MultipartConfigElement;
 
+import com.aerospike.recommendation.dataimport.MoviesUploader;
+
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.cli.PosixParser;
+import org.apache.log4j.Logger;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -26,6 +34,7 @@ import com.mongodb.MongoClient;
 @EnableAutoConfiguration
 @ComponentScan
 public class RecommendationService {
+	private static Logger log = Logger.getLogger(RecommendationService.class);
 	
 	@Bean
 	public AerospikeClient asClient() throws AerospikeException {
@@ -64,32 +73,67 @@ public class RecommendationService {
 		return new MultipartConfigElement("");
 	}
 	
-	public static void main(String[] args) throws ParseException {
+	public static void main(String[] args) throws ParseException, IOException, AerospikeException, org.json.simple.parser.ParseException {
 
 		Options options = new Options();
 		options.addOption("h", "host", true, "Server hostname (default: localhost)");
 		options.addOption("p", "port", true, "Server port (default: 3000)");
 		options.addOption("n", "namespace", true, "Aerospike namespace (default: test)");
 		options.addOption("db", "database", true, "Database: aero, mongo, both");
+		options.addOption("l", "limit", true, "Limit the number of movies uploaded");
+		options.addOption("m", "movies", true, "Movie file directory");
+		options.addOption("u", "usage", false, "Print usage.");
 		
 		// parse the command line args
 		CommandLineParser parser = new PosixParser();
 		CommandLine cl = parser.parse(options, args, false);
 
-		// set properties
-		Properties as = System.getProperties();
-		String host = cl.getOptionValue("h", "localhost");
-		as.put("seedHost", host);
-		String portString = cl.getOptionValue("p", "3000");
-		as.put("port", portString);
-		String nameSpace = cl.getOptionValue("n", "test");
-		as.put("namespace", nameSpace);
-		String dataBase = cl.getOptionValue("db", "database");
-		as.put("dataBase", dataBase);
+		if (args.length == 0 || cl.hasOption("u")) {
+			logUsage(options);
+			return;
+		}
+		
+		if (cl.hasOption("m")){
+			// run as the data loader
+			int limit = 0;
+			String host = cl.getOptionValue("h", "127.0.0.1");
+			String portString = cl.getOptionValue("p", "3000");
+			int port = Integer.parseInt(portString);
+			String namespace = cl.getOptionValue("n","test");
+			if (cl.hasOption("l")){
+				limit = Integer.parseInt(cl.getOptionValue("l", "0"));
+			}
+			log.debug("Limit: " + limit);
+			File ratingDir = new File(cl.getOptionValue("m","movies"));
+			String dbType = cl.getOptionValue("db","both");
 
-		// start app
-		SpringApplication.run(RecommendationService.class, args);
+			MoviesUploader ml = new MoviesUploader();
+			ml.loadData(host, port, namespace, dbType, ratingDir, limit);
 
+		} else {
+			// run as a RESTful service
+			// set properties
+			Properties as = System.getProperties();
+			String host = cl.getOptionValue("h", "localhost");
+			as.put("seedHost", host);
+			String portString = cl.getOptionValue("p", "3000");
+			as.put("port", portString);
+			String nameSpace = cl.getOptionValue("n", "test");
+			as.put("namespace", nameSpace);
+			String dataBase = cl.getOptionValue("db", "database");
+			as.put("dataBase", dataBase);
+
+			// start app
+			SpringApplication.run(RecommendationService.class, args);
+		}
+	}
+	private static void logUsage(Options options) {
+		HelpFormatter formatter = new HelpFormatter();
+		StringWriter sw = new StringWriter();
+		PrintWriter pw = new PrintWriter(sw);
+		String syntax = MoviesUploader.class.getName() + " [<options>]";
+		formatter.printHelp(pw, 100, syntax, "options:", options, 0, 2, null);
+		log.info(sw.toString());
 	}
 
 }

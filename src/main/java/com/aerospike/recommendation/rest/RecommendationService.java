@@ -92,20 +92,25 @@ public class RecommendationService {
 			logUsage(options);
 			return;
 		}
+		String host = cl.getOptionValue("h", "127.0.0.1");
+		String portString = cl.getOptionValue("p", "3000");
+		int port = Integer.parseInt(portString);
+		String namespace = cl.getOptionValue("n","test");
+		String dbType = cl.getOptionValue("db","both");
+		log.info("Host: " + host);
+		log.info("Port: " + portString);	
+		log.info("Namespace: " + namespace);
+		log.info("Database: " + dbType);	
 		
 		if (cl.hasOption("m")){
 			// run as the data loader
 			int limit = 0;
-			String host = cl.getOptionValue("h", "127.0.0.1");
-			String portString = cl.getOptionValue("p", "3000");
-			int port = Integer.parseInt(portString);
-			String namespace = cl.getOptionValue("n","test");
 			if (cl.hasOption("l")){
 				limit = Integer.parseInt(cl.getOptionValue("l", "0"));
 			}
-			log.debug("Limit: " + limit);
+			log.info("Limit: " + limit);
 			File ratingDir = new File(cl.getOptionValue("m","movies"));
-			String dbType = cl.getOptionValue("db","both");
+			log.info("Data directory: " + ratingDir);
 
 			MoviesUploader ml = new MoviesUploader();
 			ml.loadData(host, port, namespace, dbType, ratingDir, limit);
@@ -114,14 +119,13 @@ public class RecommendationService {
 			// run as a RESTful service
 			// set properties
 			Properties as = System.getProperties();
-			String host = cl.getOptionValue("h", "localhost");
 			as.put("seedHost", host);
-			String portString = cl.getOptionValue("p", "3000");
+			
 			as.put("port", portString);
-			String nameSpace = cl.getOptionValue("n", "test");
-			as.put("namespace", nameSpace);
-			String dataBase = cl.getOptionValue("db", "database");
-			as.put("dataBase", dataBase);
+			
+			as.put("namespace", namespace);
+			
+			as.put("dataBase", dbType);
 
 			// start app
 			SpringApplication.run(RecommendationService.class, args);

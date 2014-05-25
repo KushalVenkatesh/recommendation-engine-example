@@ -79,12 +79,12 @@ public class RESTController {
 		try{
 			thisUser = aerospikeClient.get(policy, new Key(NAME_SPACE, USERS_SET, customerID));
 			if (thisUser == null){
-				log.debug("Could not find user: " + customerID );
+				log.error("Could not find user: " + customerID );
 				throw new CustomerNotFound(customerID);
 			}
 		} catch (AerospikeException e){
-			log.debug("Could not find user: " + customerID );
-			throw new CustomerNotFound(customerID);
+			log.error("Could not find user: " + customerID, e );
+			throw new CustomerNotFound(customerID, e);
 		}
 		/*
 		 * get the movies watched and rated

@@ -12,6 +12,12 @@ public class CustomerNotFound extends RuntimeException {
 	}
 
 
+	public CustomerNotFound(String user, Throwable cause) {
+		super("Customer not found: " + user, cause);
+		this.customerID = user;
+	}
+
+
 	public CustomerNotFound(String user) {
 		super("Customer not found: " + user);
 		this.customerID = user;

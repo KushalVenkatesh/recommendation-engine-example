@@ -212,7 +212,7 @@ http://localhost:8080/mongo/recommendation/15836679
 
 The result should be like this:
 
-![Results](Results.png)
+![Results](Result.png)
 
 ##Code discussion
 

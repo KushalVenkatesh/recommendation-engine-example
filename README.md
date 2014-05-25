@@ -171,27 +171,45 @@ Create a single Linux VM (I use CentOS)
 
 Install Aerospike 3 using the instructions [Install a Single Node](https://docs.aerospike.com/display/V3/Install+a+Single+Node) at the Aerospike web site.
 
-Install MongoDB using the instructions [Install MongoDB]() at the MongoDB web site.
+Install MongoDB using the instructions [Install MongoDB](http://docs.mongodb.org/manual/installation/) at the MongoDB web site.
 
 ###Step 5:
 The test data is included in the directory `movies`. Each file contains a movie ant its ratings in JSON format. You can load all the movies or just a few. To load the data, run the JAR with the following options:
 ```bash
-java -jar aerospike-recommendation-restful-service-0.5.0.M4.jar -m \<movies\>
+java -jar aerospike-recommendation-restful-service-0.5.0.M4.jar -h 192.168.180.140 -m \<movies\> -db aero
 ```
+- -h seed host name
+- -p port
 - -m is the movie directory
 - -l is the number of movies to load (default: 0 means all the movies)
+- -db is the database type
+	- aero - Aerospike
+	- mongo - MongoDB
+	- both - both Aerospike and MongoDB
 
 
 ###Step 6: Running the Service
 
 At the command prompt, enter the following command to run the packaged application. This application will open the REST service at port 8080.
 ```bash
-java -jar aerospike-recommendation-restful-service-0.5.0.M4.jar
+java -jar aerospike-recommendation-restful-service-0.5.0.M4.jar -h 192.168.180.147 -db aero
 ```
+- -h seed host name
+- -p port
+- -db is the database type
+	- aero - Aerospike
+	- mongo - MongoDB
+	- both - both Aerospike and MongoDB
+
 Then, in a browser, enter the URL:
 ```
 http://localhost:8080/aerospike/recommendation/15836679
 ```
+or
+```
+http://localhost:8080/mongo/recommendation/15836679
+```
+
 The result should be like this:
 
 ![Results](Results.png)

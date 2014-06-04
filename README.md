@@ -135,6 +135,7 @@ This is a **very elementary** technique and it is useful only as an illustration
  - [Maven 3.0+](http://maven.apache.org/download.cgi)
  - [Aerospike Java SDK 3.0+](http://www.aerospike.com/aerospike-3-client-sdk/)
  - An Aerospike 3 server installation
+ - A MongoDB server installation
  - The test data
 
 

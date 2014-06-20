@@ -223,8 +223,22 @@ The result should be like this:
 
 The methods the find similarity are deliberately linear, and avoid complex framework methods and hierarchies. This enables the reader can clearly see all the parts of the algorithm without details being obfuscated buy frameworks.
   
-###AerospikeThe most interesting part of the code is the method: `getAerospikeRecommendationFor()` in the class RESTController.```javapublic @ResponseBody JSONArray getAerospikeRecommendationFor(@PathVariable("customer") String customerID)
-				throws Exception {	. . . }```This method processes a REST request and responds with a JSON object that contains recommended movies.The customer ID supplied in the REST request is used as the key to retrieve the customer record.```javathisUser = client.get(policy, new Key(NAME_SPACE, USERS_SET, customerID));```Once we have the customer record, we get a list of movies that they have watched. This list is limited by the constant `MOVIE_REVIEW_LIMIT`. 
+###Aerospike
+The most interesting part of the code is the method: `getAerospikeRecommendationFor()` in the class RESTController.
+```java
+public @ResponseBody JSONArray getAerospikeRecommendationFor(@PathVariable("customer") String customerID)
+				throws Exception {	
+. . . 
+}
+```
+
+This method processes a REST request and responds with a JSON object that contains recommended movies.
+
+The customer ID supplied in the REST request is used as the key to retrieve the customer record.
+```java
+thisUser = client.get(policy, new Key(NAME_SPACE, USERS_SET, customerID));
+```
+Once we have the customer record, we get a list of movies that they have watched. This list is limited by the constant `MOVIE_REVIEW_LIMIT`. 
 ```java
 /*
  * get the movies watched and rated
@@ -242,7 +256,15 @@ List<Map<String, Object>> customerWatchedList =
 			(List<Map<String, Object>>)customerWatched.peek(MOVIE_REVIEW_LIMIT);
 
 ```
-Then we make a vector from the the list of movies watched.```javaList<Long> thisCustomerMovieVector = makeVector(customerWatchedList);```This vector is simply a list of long integers. We will use this vector in our similarity comparisons.We then iterate through the movies that the customer has watched, and build a list of customers that have watched these movies, and find the most similar customer using Cosine Similarity:```java/*
+Then we make a vector from the the list of movies watched.
+```java
+List<Long> thisCustomerMovieVector = makeVector(customerWatchedList);
+```
+This vector is simply a list of long integers. We will use this vector in our similarity comparisons.
+
+We then iterate through the movies that the customer has watched, and build a list of customers that have watched these movies, and find the most similar customer using Cosine Similarity:
+```java
+/*
  * for each movie this customer watched, iterate
  * through the other customers that also watched
  * the movie 
@@ -285,7 +307,10 @@ for (Map<String, Object> wr : customerWatchedList){
 		}
 	}
 }
-```Having completed iterating through the list of similar customers you will have the customer with the highest similarity score. We then get the movies that this customer has watched ```java// get the movies
+```
+Having completed iterating through the list of similar customers you will have the customer with the highest similarity score. We then get the movies that this customer has watched 
+```java
+// get the movies
 Key[] recomendedMovieKeys = new Key[bestMatchedPurchases.size()];
 int index = 0;
 for (int recomendedMovieID : bestMatchedPurchases){
@@ -294,7 +319,10 @@ for (int recomendedMovieID : bestMatchedPurchases){
 	index++;
 }
 Record[] recommendedMovies = aerospikeClient.get(policy, recomendedMovieKeys, TITLE, YEAR_OF_RELEASE);
-```and return them into a JSON object and return it in the request body.```java// Turn the Aerospike records into a JSONArray
+```
+and return them into a JSON object and return it in the request body.
+```java
+// Turn the Aerospike records into a JSONArray
 JSONArray recommendations = new JSONArray();
 for (Record rec: recommendedMovies){
 	if (rec != null)
@@ -315,7 +343,11 @@ public @ResponseBody BasicDBList getMongoRecommendationFor(@PathVariable("custom
 . . .
 }
 ```
-This method processes a REST request and responds with a JSON object that contains recommended movies.The customer ID supplied in the REST request is used as the key to retrieve the customer record.```java/* 
+This method processes a REST request and responds with a JSON object that contains recommended movies.
+
+The customer ID supplied in the REST request is used as the key to retrieve the customer record.
+```java
+/* 
  * Get the customer's purchase history as a list of ratings
  */
 BasicDBObject thisUser = null;
@@ -325,7 +357,9 @@ thisUser = (BasicDBObject) customerCollection.findOne(whereQuery);
 if (thisUser == null){
 	log.debug("Could not find user: " + customerID );
 	throw new CustomerNotFound(customerID);
-}```Once we have the customer record, we get a list of movies that they have watched. This list is limited by the constant `MOVIE_REVIEW_LIMIT`. 
+}
+```
+Once we have the customer record, we get a list of movies that they have watched. This list is limited by the constant `MOVIE_REVIEW_LIMIT`. 
 ```java
 /*
  * get the movies watched and rated
@@ -337,9 +371,14 @@ if (customerWatched == null || customerWatched.size()==0){
 	throw new NoMoviesFound(customerID);
 }
 ```
-Then we make a vector from the the list of movies watched.```java
+Then we make a vector from the the list of movies watched.
+```java
 List<Long> thisCustomerMovieVector = makeVector(customerWatched);
-```This vector is simply a list of long integers. We will use this vector in our similarity comparisons.We then iterate through the movies that the customer has watched, and build a list of customers that have watched these movies, and find the most similar customer using Cosine Similarity:```java
+```
+This vector is simply a list of long integers. We will use this vector in our similarity comparisons.
+
+We then iterate through the movies that the customer has watched, and build a list of customers that have watched these movies, and find the most similar customer using Cosine Similarity:
+```java
 /*
  * for each movie this customer watched, iterate
  * through the other customers that also watched
@@ -382,7 +421,10 @@ for (Map<String, Object> wr : customerWatched) {
 			}
 		}
 	}
-}```Having completed iterating through the list of similar customers you will have the customer with the highest similarity score. We then get the movies that this customer has watched ```java
+}
+```
+Having completed iterating through the list of similar customers you will have the customer with the highest similarity score. We then get the movies that this customer has watched 
+```java
 // get the movies
 BasicDBList recommendedMovies = new BasicDBList();
 BasicDBObject inQuery = new BasicDBObject();
@@ -390,5 +432,13 @@ inQuery.put(MOVIE_ID, new BasicDBObject("$in", bestMatchedPurchases));
 DBCursor cursor = movieCollection.find(inQuery);
 while(cursor.hasNext()) {
 	recommendedMovies.add(cursor.next());
-}```Mongo's data format is JSON so simply return the JSON result as the request body.```java
-return recommendedMovies;```##SummaryCongratulations! You have just developed a simple recommendation engine, housed in a RESTful service using Spring and Aerospike. 
+}
+```
+Mongo's data format is JSON so simply return the JSON result as the request body.
+```java
+return recommendedMovies;
+```
+
+##Summary
+Congratulations! You have just developed a simple recommendation engine, housed in a RESTful service using Spring,  Aerospike and MongoDB. 
+

@@ -1,12 +1,16 @@
-#Building a Recommendation Engine with Aerospike and Spring Boot 
+#Building a Recommendation Engine with Aerospike, MongoDB and Spring Boot 
 
 Author: Peter Milne, Aerospike Director of Application Engineering
 
-**Recommendation engines** are used in applications to personalize the user experience. For example, e-commerce applications recommend products to a customer that other customers -  with similar behavior - have viewed, enjoyed, or purchased. News application would use a real-time recommendation engine, as stories come and go quickly. These application additions improves the user experience, increases sales and helps retain loyal customers. This guide contains code for an example real-time non-contextual cosine-similarity based engine. By using most recent behavior for recommendations, etra 
+**Recommendation engines** are used in applications to personalize the user experience. For example, e-commerce applications recommend products to a customer that other customers -  with similar behavior - have viewed, enjoyed, or purchased. News application would use a real-time recommendation engine, as stories come and go quickly. These application additions improves the user experience, increases sales and helps retain loyal customers. This guide contains code for an example real-time non-contextual cosine-similarity based engine. 
 
 This example use the **Spring Boot** application environment, a powerful jump-start into the versatile Spring Java based web application framework. With Spring Boot you can build powerful applications with production grade services with little effort - and easily launch and enjoy the enclosed example. This example can be translated into other frameworks.
 
-The **Aerospike** database is used as the storage engine, and is a good fit. Aerospike is a highly available, low latency NoSQL database that scales linearly - thus easy to run an online service. It is an in-memory database optimized to use both DRAM and native Flash. Aerospike boasts latencies averaging less than 1 millisecond with well more than 100,000 queries per second per server, with high availability and immediate consistency. Aerospike is well suited to this example because in order to make a recommendation, thousands of objects and behaviors may be examined, and each behavior will generate two writes to the database.
+The **Aerospike** and **MongoDB** are the databases you can use as the storage engines. You can choose to use one or both. Aerospike is a highly available, low latency NoSQL database that scales linearly - thus easy to run an online service. It is an in-memory database optimized to use both DRAM and native Flash. Aerospike boasts latencies averaging less than 1 millisecond with well more than 100,000 queries per second per server, with high availability and immediate consistency. 
+
+**Aerospike** is well suited to this example because it scales both horizontally (out to multiple nodes in a cluster) and vertically bing completely multi core and NUMA node aware. This is all automatic and zero-touch.
+
+**MongoDB** has a nice programatic interface and uses a fashionable JSON dialog between client and server. We did find some challenges in scaling MongoDB with its approach to clustering and high availability.
 
 ##What you will build
 This guide will take you through accessing the Github repository containing the project, and creating a simple recommendation service. The provided engine will use Similarity Vectors to recommend a product - in the case of the example data set, movies - to a customer. The algorithm for this is very elementary, and will provide a starting point for real-time recommendation research, but also will provide recommendations based on the demonstration data provided.
@@ -217,7 +221,10 @@ The result should be like this:
 
 ##Code discussion
 
-###AerospikeThe most interesting part of the code is the method: getRecommendation() in the class RESTController.```javapublic @ResponseBody JSONArray getRecommendationFor(@PathVariable("customer") String customerID) throws Exception {	. . . }```This method processes a REST request and responds with a JSON object that contains recommended movies.The customer ID supplied in the REST request is used as the key to retrieve the customer record.```javathisUser = client.get(policy, new Key(NAME_SPACE, USERS_SET, customerID));```Once we have the customer record, we get a list of movies that they have watched. This list is limited by the constant `MOVIE_REVIEW_LIMIT`. 
+The methods the find similarity are deliberately linear, and avoid complex framework methods and hierarchies. This enables the reader can clearly see all the parts of the algorithm without details being obfuscated buy frameworks.
+  
+###AerospikeThe most interesting part of the code is the method: `getAerospikeRecommendationFor()` in the class RESTController.```javapublic @ResponseBody JSONArray getAerospikeRecommendationFor(@PathVariable("customer") String customerID)
+				throws Exception {	. . . }```This method processes a REST request and responds with a JSON object that contains recommended movies.The customer ID supplied in the REST request is used as the key to retrieve the customer record.```javathisUser = client.get(policy, new Key(NAME_SPACE, USERS_SET, customerID));```Once we have the customer record, we get a list of movies that they have watched. This list is limited by the constant `MOVIE_REVIEW_LIMIT`. 
 ```java
 /*
  * get the movies watched and rated
@@ -298,4 +305,90 @@ return recommendations;
 ```
 ###MongoDB
 
-TO DO##SummaryCongratulations! You have just developed a simple recommendation engine, housed in a RESTful service using Spring and Aerospike. 
+Mongo uses a different API set, but the basic algorithm is the same. Mongo tended to use more RAM and network bandwidth for the same data set.
+
+Like in the Aerospike example above, most of the works is done in the method: getRecommendation() in the class RESTController.
+
+```java
+public @ResponseBody BasicDBList getMongoRecommendationFor(@PathVariable("customer") String customerID) 
+	throws Exception {
+. . .
+}
+```
+This method processes a REST request and responds with a JSON object that contains recommended movies.The customer ID supplied in the REST request is used as the key to retrieve the customer record.```java/* 
+ * Get the customer's purchase history as a list of ratings
+ */
+BasicDBObject thisUser = null;
+BasicDBObject whereQuery = new BasicDBObject();
+whereQuery.put(CUSTOMER_ID, customerID);
+thisUser = (BasicDBObject) customerCollection.findOne(whereQuery);
+if (thisUser == null){
+	log.debug("Could not find user: " + customerID );
+	throw new CustomerNotFound(customerID);
+}```Once we have the customer record, we get a list of movies that they have watched. This list is limited by the constant `MOVIE_REVIEW_LIMIT`. 
+```java
+/*
+ * get the movies watched and rated
+ */
+List<Map<String, Object>> customerWatched = (List<Map<String, Object>>) thisUser.get(CUSTOMER_WATCHED);
+if (customerWatched == null || customerWatched.size()==0){
+	// customer Hasen't Watched anything
+	log.debug("No movies found for customer: " + customerID );
+	throw new NoMoviesFound(customerID);
+}
+```
+Then we make a vector from the the list of movies watched.```java
+List<Long> thisCustomerMovieVector = makeVector(customerWatched);
+```This vector is simply a list of long integers. We will use this vector in our similarity comparisons.We then iterate through the movies that the customer has watched, and build a list of customers that have watched these movies, and find the most similar customer using Cosine Similarity:```java
+/*
+ * for each movie this customer watched, iterate
+ * through the other customers that also watched
+ * the movie 
+ */
+BasicDBObject movieRecord;
+BasicDBObject movieQuery = new BasicDBObject();
+BasicDBList jsonWatched;
+		
+for (Map<String, Object> wr : customerWatched) {
+			movieQuery.put(MOVIE_ID, wr.get(MOVIE_ID));
+			movieRecord = 
+				(BasicDBObject) movieCollection.findOne(movieQuery);
+			
+	List<Map<String, Object>> whoWatched = 
+			(List<Map<String, Object>>) movieRecord.get(WATCHED_BY);
+
+	if (!(whoWatched == null)){
+		int end = Math.min(MOVIE_REVIEW_LIMIT, whoWatched.size()); 
+		/* 
+		 * Some movies are watched by >100k customers, only look at the last n movies, or the 
+		 * number of customers, whichever is smaller
+		 */
+		for (int index = 0; index < end; index++){
+			Map<String, Object> watchedBy = whoWatched.get(index);
+			String similarCustomerId = (String) watchedBy.get(CUSTOMER_ID);
+			if (!similarCustomerId.equals(customerID)) {
+				// find user with the highest similarity
+				BasicDBObject similarCustomerQuery = new BasicDBObject();
+						whereQuery.put(CUSTOMER_ID, similarCustomerId);
+				BasicDBObject similarCustomer = 
+					(BasicDBObject)customerCollection.findOne(similarCustomerQuery);
+
+				List<Map<String, Object>> similarCustomerWatched = (List<Map<String, Object>>) similarCustomer.get(CUSTOMER_WATCHED);
+				double score = easySimilarity(thisCustomerMovieVector, similarCustomerWatched);
+				if (score > bestScore){
+					bestScore = score;
+					bestMatchedCustomer = similarCustomer;
+				}
+			}
+		}
+	}
+}```Having completed iterating through the list of similar customers you will have the customer with the highest similarity score. We then get the movies that this customer has watched ```java
+// get the movies
+BasicDBList recommendedMovies = new BasicDBList();
+BasicDBObject inQuery = new BasicDBObject();
+inQuery.put(MOVIE_ID, new BasicDBObject("$in", bestMatchedPurchases));
+DBCursor cursor = movieCollection.find(inQuery);
+while(cursor.hasNext()) {
+	recommendedMovies.add(cursor.next());
+}```Mongo's data format is JSON so simply return the JSON result as the request body.```java
+return recommendedMovies;```##SummaryCongratulations! You have just developed a simple recommendation engine, housed in a RESTful service using Spring and Aerospike. 

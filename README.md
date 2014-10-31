@@ -112,7 +112,7 @@ Aerospike large objects are not stored contiguously with the associated record, 
 
 ![Record with LDT](Record_with_without_LDT.png)
 
-In this example we are using a Large Stack to store movie recommendations. Large Stack objects (lstack) are particularly suited for tracking current user behavior or time series data like tweet streams , products viewed, websites visited or recommendations made. All recent activity is prepended or pushed on the stack and decisions are made based on processing recent data, in-database. These objects are accessed using client-side lstack functions -  push, peek, filter - which in turn call server-side UDFs to read and write data. The push and peek functions can be enhanced to transform values before they are written or filter values before they are returned.  Large Stack Data is pushed onto the top of the stack and, potentially, flows off the end if a fixed capacity is defined.
+In this example we are using a Large Stack to store movie recommendations. Large Stack objects (lstack) are particularly suited for tracking current user behavior or time series data like tweet streams, products viewed, websites visited or recommendations made. All recent activity is prepended or pushed on the stack and decisions are made based on processing recent data, in-database. These objects are accessed using client-side lstack functions - push, peek, filter - which in turn call server-side UDFs to read and write data. The push and peek functions can be enhanced to transform values before they are written or filter values before they are returned.  Large Stack Data is pushed onto the top of the stack and, potentially, flows off the end if a fixed capacity is defined.
 
 ![Large Stack](LDT_Record_LStack.png)
 
@@ -139,8 +139,8 @@ This is a **very elementary** technique and it is useful only as an illustration
  - A favorite text editor or IDE
  - [JDK 7](http://www.google.com/url?q=http%3A%2F%2Fwww.oracle.com%2Ftechnetwork%2Fjava%2Fjavase%2Fdownloads%2Findex.html&sa=D&sntz=1&usg=AFQjCNGWCcKCIFm3bfDWtU41j6HJzekqNQ) or later
  - [Maven 2](http://maven.apache.org/download.cgi) or later 
- - [Aerospike Java Client 3.0+](http://www.aerospike.com/docs/client/java/)
- - An Aerospike 3 server installation
+ - [Aerospike Java Client](http://www.aerospike.com/docs/client/java/)
+ - An [Aerospike Server](http://www.aerospike.com/download/server/latest/) installation
  - A MongoDB server installation
  - The test data
 
@@ -151,7 +151,7 @@ As this project is written in Java and using the Spring framework with Aerospike
 
 Follow the instructions to [Install Maven](http://maven.apache.org/guides/getting-started/maven-in-five-minutes.html) your development machine.
 
-The [Aerospike Java client](https://docs.aerospike.com/display/V3/Java+Client+-+Installation) and the MongoDB Java client will be installed on your local machine as part of the Maven build.  
+The [Aerospike Java client](http://www.aerospike.com/docs/client/java/) and the MongoDB Java client will be installed on your local machine as part of the Maven build.  
 
 ###Step 2: Clone the project git repository
 
@@ -176,14 +176,14 @@ Setting up an Aerospike single node cluster is easy. Aerospike only runs on Linu
 
 Create a single Linux VM (I use CentOS)
 
-Install Aerospike 3 using the instructions [Install a Single Node](https://docs.aerospike.com/display/V3/Install+a+Single+Node) at the Aerospike web site.
+Install Aerospike 3 using the [Installation Guide](http://www.aerospike.com/download/server/3.3.21/) at the Aerospike web site.
 
 Install MongoDB using the instructions [Install MongoDB](http://docs.mongodb.org/manual/installation/) at the MongoDB web site.
 
 ###Step 5:
 The test data is included in the directory `movies`. Each file contains a movie ant its ratings in JSON format. You can load all the movies or just a few. To load the data, run the JAR with the following options:
 ```bash
-java -jar aerospike-recommendation-restful-service-0.5.0.M4.jar -h 192.168.180.140 -m \<movies\> -db aero
+java -jar aerospike-recommendation-restful-service-0.5.0.M4.jar -h 192.168.180.140 -m <movies> -db aero
 ```
 - -h seed host name
 - -p port
@@ -225,22 +225,8 @@ The result should be like this:
 
 The methods the find similarity are deliberately linear, and avoid complex framework methods and hierarchies. This enables the reader can clearly see all the parts of the algorithm without details being obfuscated buy frameworks.
   
-###Aerospike
-The most interesting part of the code is the method: `getAerospikeRecommendationFor()` in the class RESTController.
-```java
-public @ResponseBody JSONArray getAerospikeRecommendationFor(@PathVariable("customer") String customerID)
-				throws Exception {	
-. . . 
-}
-```
-
-This method processes a REST request and responds with a JSON object that contains recommended movies.
-
-The customer ID supplied in the REST request is used as the key to retrieve the customer record.
-```java
-thisUser = client.get(policy, new Key(NAME_SPACE, USERS_SET, customerID));
-```
-Once we have the customer record, we get a list of movies that they have watched. This list is limited by the constant `MOVIE_REVIEW_LIMIT`. 
+###AerospikeThe most interesting part of the code is the method: `getAerospikeRecommendationFor()` in the class RESTController.```javapublic @ResponseBody JSONArray getAerospikeRecommendationFor(@PathVariable("customer") String customerID)
+				throws Exception {	. . . }```This method processes a REST request and responds with a JSON object that contains recommended movies.The customer ID supplied in the REST request is used as the key to retrieve the customer record.```javathisUser = client.get(policy, new Key(NAME_SPACE, USERS_SET, customerID));```Once we have the customer record, we get a list of movies that they have watched. This list is limited by the constant `MOVIE_REVIEW_LIMIT`. 
 ```java
 /*
  * get the movies watched and rated
@@ -258,15 +244,7 @@ List<Map<String, Object>> customerWatchedList =
 			(List<Map<String, Object>>)customerWatched.peek(MOVIE_REVIEW_LIMIT);
 
 ```
-Then we make a vector from the the list of movies watched.
-```java
-List<Long> thisCustomerMovieVector = makeVector(customerWatchedList);
-```
-This vector is simply a list of long integers. We will use this vector in our similarity comparisons.
-
-We then iterate through the movies that the customer has watched, and build a list of customers that have watched these movies, and find the most similar customer using Cosine Similarity:
-```java
-/*
+Then we make a vector from the the list of movies watched.```javaList<Long> thisCustomerMovieVector = makeVector(customerWatchedList);```This vector is simply a list of long integers. We will use this vector in our similarity comparisons.We then iterate through the movies that the customer has watched, and build a list of customers that have watched these movies, and find the most similar customer using Cosine Similarity:```java/*
  * for each movie this customer watched, iterate
  * through the other customers that also watched
  * the movie 
@@ -309,10 +287,7 @@ for (Map<String, Object> wr : customerWatchedList){
 		}
 	}
 }
-```
-Having completed iterating through the list of similar customers you will have the customer with the highest similarity score. We then get the movies that this customer has watched 
-```java
-// get the movies
+```Having completed iterating through the list of similar customers you will have the customer with the highest similarity score. We then get the movies that this customer has watched ```java// get the movies
 Key[] recomendedMovieKeys = new Key[bestMatchedPurchases.size()];
 int index = 0;
 for (int recomendedMovieID : bestMatchedPurchases){
@@ -321,10 +296,7 @@ for (int recomendedMovieID : bestMatchedPurchases){
 	index++;
 }
 Record[] recommendedMovies = aerospikeClient.get(policy, recomendedMovieKeys, TITLE, YEAR_OF_RELEASE);
-```
-and return them into a JSON object and return it in the request body.
-```java
-// Turn the Aerospike records into a JSONArray
+```and return them into a JSON object and return it in the request body.```java// Turn the Aerospike records into a JSONArray
 JSONArray recommendations = new JSONArray();
 for (Record rec: recommendedMovies){
 	if (rec != null)
@@ -345,11 +317,7 @@ public @ResponseBody BasicDBList getMongoRecommendationFor(@PathVariable("custom
 . . .
 }
 ```
-This method processes a REST request and responds with a JSON object that contains recommended movies.
-
-The customer ID supplied in the REST request is used as the key to retrieve the customer record.
-```java
-/* 
+This method processes a REST request and responds with a JSON object that contains recommended movies.The customer ID supplied in the REST request is used as the key to retrieve the customer record.```java/* 
  * Get the customer's purchase history as a list of ratings
  */
 BasicDBObject thisUser = null;
@@ -359,9 +327,7 @@ thisUser = (BasicDBObject) customerCollection.findOne(whereQuery);
 if (thisUser == null){
 	log.debug("Could not find user: " + customerID );
 	throw new CustomerNotFound(customerID);
-}
-```
-Once we have the customer record, we get a list of movies that they have watched. This list is limited by the constant `MOVIE_REVIEW_LIMIT`. 
+}```Once we have the customer record, we get a list of movies that they have watched. This list is limited by the constant `MOVIE_REVIEW_LIMIT`. 
 ```java
 /*
  * get the movies watched and rated
@@ -373,14 +339,9 @@ if (customerWatched == null || customerWatched.size()==0){
 	throw new NoMoviesFound(customerID);
 }
 ```
-Then we make a vector from the the list of movies watched.
-```java
+Then we make a vector from the the list of movies watched.```java
 List<Long> thisCustomerMovieVector = makeVector(customerWatched);
-```
-This vector is simply a list of long integers. We will use this vector in our similarity comparisons.
-
-We then iterate through the movies that the customer has watched, and build a list of customers that have watched these movies, and find the most similar customer using Cosine Similarity:
-```java
+```This vector is simply a list of long integers. We will use this vector in our similarity comparisons.We then iterate through the movies that the customer has watched, and build a list of customers that have watched these movies, and find the most similar customer using Cosine Similarity:```java
 /*
  * for each movie this customer watched, iterate
  * through the other customers that also watched
@@ -423,10 +384,7 @@ for (Map<String, Object> wr : customerWatched) {
 			}
 		}
 	}
-}
-```
-Having completed iterating through the list of similar customers you will have the customer with the highest similarity score. We then get the movies that this customer has watched 
-```java
+}```Having completed iterating through the list of similar customers you will have the customer with the highest similarity score. We then get the movies that this customer has watched ```java
 // get the movies
 BasicDBList recommendedMovies = new BasicDBList();
 BasicDBObject inQuery = new BasicDBObject();
@@ -434,13 +392,5 @@ inQuery.put(MOVIE_ID, new BasicDBObject("$in", bestMatchedPurchases));
 DBCursor cursor = movieCollection.find(inQuery);
 while(cursor.hasNext()) {
 	recommendedMovies.add(cursor.next());
-}
-```
-Mongo's data format is JSON so simply return the JSON result as the request body.
-```java
-return recommendedMovies;
-```
-
-##Summary
-Congratulations! You have just developed a simple recommendation engine, housed in a RESTful service using Spring,  Aerospike and MongoDB. 
-
+}```Mongo's data format is JSON so simply return the JSON result as the request body.```java
+return recommendedMovies;```##SummaryCongratulations! You have just developed a simple recommendation engine, housed in a RESTful service using Spring and Aerospike. 

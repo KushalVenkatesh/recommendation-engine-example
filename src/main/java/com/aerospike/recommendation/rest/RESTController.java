@@ -72,22 +72,8 @@ public class RESTController {
 		log.debug("Finding recomendations for " + customerID);
 		Policy policy = new Policy();
 
-		/* 
-		 * Get the customer's purchase history as a list of ratings
-		 */
-		Record thisUser = null;
-		try{
-			thisUser = aerospikeClient.get(policy, new Key(NAME_SPACE, USERS_SET, customerID));
-			if (thisUser == null){
-				log.error("Could not find user: " + customerID );
-				throw new CustomerNotFound(customerID);
-			}
-		} catch (AerospikeException e){
-			log.error("Could not find user: " + customerID, e );
-			throw new CustomerNotFound(customerID, e);
-		}
 		/*
-		 * get the movies watched and rated
+		 * get the latest movies watched and rated by the customer
 		 */
 		LargeStack customerWatched = aerospikeClient.getLargeStack(new Policy(), 
 				new Key(NAME_SPACE, USERS_SET, customerID), 
@@ -147,6 +133,7 @@ public class RESTController {
 					}
 				}
 			}
+			whoWatched = null;
 		}
 		log.debug("Best customer: " + bestMatchedCustomer);
 		log.debug("Best score: " + bestScore);
@@ -167,7 +154,7 @@ public class RESTController {
 			log.debug("Added Movie key: " + recomendedMovieKeys[index]);
 			index++;
 		}
-		Record[] recommendedMovies = aerospikeClient.get(policy, recomendedMovieKeys, TITLE, YEAR_OF_RELEASE);
+		Record[] recommendedMovies = aerospikeClient.get(null, recomendedMovieKeys, TITLE, YEAR_OF_RELEASE);
 
 		// This is a diagnostic step
 		if (log.isDebugEnabled()){
@@ -186,6 +173,8 @@ public class RESTController {
 		log.debug("Found these recomendations: " + recommendations);
 		return recommendations;
 	}
+	
+	
 	/**
 	 * get a recommendation for a specific customer from MongoDB
 	 * @param user a unique ID for a customer
@@ -309,8 +298,11 @@ public class RESTController {
 			String movieString = (String)one.get(MOVIE_ID);
 			if (movieString == null)
 				movieVector.add(0L);
-			else
-				movieVector.add(Long.parseLong(movieString));
+			else {
+				// Ad the movie ID and rating to the vector
+				movieVector.add(Long.parseLong(movieString)); // Movie ID
+				movieVector.add(Long.parseLong((String)one.get(RATING))); // Customer Rating
+			}
 		}
 		return movieVector;
 	}

@@ -14,6 +14,7 @@ import org.json.simple.parser.ParseException;
 import com.aerospike.client.AerospikeClient;
 import com.aerospike.client.AerospikeException;
 import com.aerospike.client.Bin;
+import com.aerospike.client.Key;
 import com.aerospike.client.Value;
 import com.aerospike.client.large.LargeStack;
 import com.aerospike.client.policy.Policy;
@@ -135,10 +136,11 @@ public class MoviesUploader {
 	}
 
 	private  void saveMovieToAerospike(String nameSpace, String set, Movie movie) throws AerospikeException {
+		Key key =  movie.getKey(nameSpace, set);
 		aerospikeClient.put(writePolicy, 
-				movie.getKey(nameSpace, set), 
+				key, 
 				movie.asBins());
-		LargeStack ratings = aerospikeClient.getLargeStack(writePolicy, movie.getKey(nameSpace, set), Movie.WATCHED_BY+"List", null);
+		LargeStack ratings = aerospikeClient.getLargeStack(writePolicy, key, Movie.WATCHED_BY+"List", null);
 		List<WatchedRated> ratingList = movie.getWatchedBy();
 		int count = 0, errors = 0;
 		for (WatchedRated wr : ratingList){

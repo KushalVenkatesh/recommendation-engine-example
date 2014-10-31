@@ -6,16 +6,18 @@ Author: Peter Milne, Aerospike Director of Application Engineering
 
 This example use the **Spring Boot** application environment, a powerful jump-start into the versatile Spring Java based web application framework. With Spring Boot you can build powerful applications with production grade services with little effort - and easily launch and enjoy the enclosed example. This example can be translated into other frameworks.
 
-The **Aerospike** and **MongoDB** are the databases you can use as the storage engines. You can choose to use one or both. Aerospike is a highly available, low latency NoSQL database that scales linearly - thus easy to run an online service. It is an in-memory database optimized to use both DRAM and native Flash. Aerospike boasts latencies averaging less than 1 millisecond with well more than 100,000 queries per second per server, with high availability and immediate consistency. 
+The **Aerospike** and **MongoDB** are the databases you can use as the storage engines. You can choose to use one or both. 
 
-**Aerospike** is well suited to this example because it scales both horizontally (out to multiple nodes in a cluster) and vertically bing completely multi core and NUMA node aware. This is all automatic and zero-touch.
+**Aerospike** is a highly available, low latency NoSQL database that scales out linearly - thus easy to run an online service. It is well suited to this example because it scales both horizontally (out to multiple nodes in a cluster) and vertically being completely multi core and NUMA node aware. It  It is an in-memory database optimized to use both DRAM and native Flash. Aerospike boasts latencies averaging less than 1 millisecond with well more than 100,000 queries per second per server, with high availability and immediate consistency. This is all automatic and zero-touch.
 
 **MongoDB** has a nice programatic interface and uses a fashionable JSON dialog between client and server. We did find some challenges in scaling MongoDB with its approach to clustering and high availability.
 
 ##What you will build
 This guide will take you through accessing the Github repository containing the project, and creating a simple recommendation service. The provided engine will use Similarity Vectors to recommend a product - in the case of the example data set, movies - to a customer. The algorithm for this is very elementary, and will provide a starting point for real-time recommendation research, but also will provide recommendations based on the demonstration data provided.
 
-To provide a recommendation in real-time, you will need a database that can retrieve your data very quickly, because several database requests will be necessary to do the full recommendation. If your database is too slow, you will easily find - even over reasonable data sets - that the recommendation time is slow. You could try this with any database, in this exercise we will use both the Aerospike NoSQL database  and the MongoDB data base. This will allow us to evaluate the merits of both NoSQL databases.
+To provide a recommendation in real-time, you will need a database that can retrieve your data very quickly, as several database requests will be necessary to do the full recommendation. If your database is too slow, you will find - even over reasonable data sets - that the recommendation time is slow. 
+
+You could try this with any database, in this exercise we will use both the Aerospike NoSQL database  and the MongoDB data base. This will allow us to evaluate the merits of both NoSQL databases.
 
 You will build a service that accepts an HTTP GET request:
 
@@ -104,17 +106,17 @@ Customer ID (primary key) | MOVIES_WATCHED
 String | Large Stack of Ratings (Aerospike), List (MongoDB)
 
 ###Aerospike Large Data Types (LDTs)
-What are [LDTs](https://docs.aerospike.com/pages/viewpage.action?pageId=3807106) exactly? Unique to Aerospike, Large Data Types allow individual record bins to contain collections of hundreds of thousands of objects (or documents), and they allow these collections to be efficiently stored and processed in-database.  The Aerospike LDT Feature exploits the Aerospike User-Defined Functions mechanism and a new record container type, which we refer to as "sub-records".  Sub-records are very similar to regular Aerospike records, with the main exception that they are linked to a parent record.  They share the same partition address and internal record lock as the parent record, so they move with their parent record during migrations and they are protected under the same isolation mechanism as their parent record.
+What are [LDTs](http://www.aerospike.com/docs/guide/ldt.html) exactly? Unique to Aerospike, Large Data Types allow individual record Bins (columns or fields) to contain collections of hundreds of thousands of objects (or documents), and they allow these collections to be efficiently stored and processed in-database.  The Aerospike LDT Feature exploits the Aerospike User-Defined Functions mechanism and a new record container type, which we refer to as "sub-records".  Sub-records are very similar to regular Aerospike records, with the main exception that they are linked to a parent record.  They share the same partition address and internal record lock as the parent record, so they move with their parent record during migrations and they are protected under the same isolation mechanism as their parent record.
 
 Aerospike large objects are not stored contiguously with the associated record, but instead are split into sub-records (with sizes ranging roughly from 2kb to 32kb), as shown in Figure 1.  The sub-records are indexed and linked together, and managed in-database via User Defined Functions (UDFs). The use of sub-records means that access to an LDT instance typically affects only a single sub-record, rather than the entire record bin value. 
 
-![Record with LDT](RecordWithAndWO_LDT.jpeg)
+![Record with LDT](Record_with_without_LDT.png)
 
 In this example we are using a Large Stack to store movie recommendations. Large Stack objects (lstack) are particularly suited for tracking current user behavior or time series data like tweet streams , products viewed, websites visited or recommendations made. All recent activity is prepended or pushed on the stack and decisions are made based on processing recent data, in-database. These objects are accessed using client-side lstack functions -  push, peek, filter - which in turn call server-side UDFs to read and write data. The push and peek functions can be enhanced to transform values before they are written or filter values before they are returned.  Large Stack Data is pushed onto the top of the stack and, potentially, flows off the end if a fixed capacity is defined.
 
-![Large Stack](LrgeStack.jpeg)
+![Large Stack](LDT_Record_LStack.png)
 
-Contents of an lstack are stored in a tiered manner (Figure 2c).  There is a "Hot List", which is a list of data items that is stored directly in the parent record.  Access to the hot list is immediate, so there is no additional I/O involved for reading or writing.  The sizes are configurable to match user needs, but the default Hot List size is 100 objects.  The parent record also includes a "Warm List",  which is a list of sub-record pointers.  The default Warm List size is also 100, and the default sub-record capacity is 100, which gives the Warm List a default capacity of 10,000 objects. As is the case with the Hot List, all of these parameters can be set by the administrator for optimal tuning.  Finally the parent record contains a pointer to the cold data directory – a linked list of sub-records containing directories, where each directory contains pointers to data sub-records.  Each Cold List directory node is basically the equivalent of a Warm List.  Stack objects naturally migrate from the Hot List to the Warm List and then to the Cold List over time.  This tiered organization ensures that access to the Hot List incurs no additional I/O, access to the Warm List incurs only 1 additional I/O, and access to the Cold List incurs 2 or more I/Os. 
+Contents of an lstack are stored in a tiered manner.  There is a "Hot List", which is a list of data items that is stored directly in the parent record.  Access to the hot list is immediate, so there is no additional I/O involved for reading or writing.  The sizes are configurable to match user needs, but the default Hot List size is 100 objects.  The parent record also includes a "Warm List",  which is a list of sub-record pointers.  The default Warm List size is also 100, and the default sub-record capacity is 100, which gives the Warm List a default capacity of 10,000 objects. As is the case with the Hot List, all of these parameters can be set by the administrator for optimal tuning.  Finally the parent record contains a pointer to the cold data directory – a linked list of sub-records containing directories, where each directory contains pointers to data sub-records.  Each Cold List directory node is basically the equivalent of a Warm List.  Stack objects naturally migrate from the Hot List to the Warm List and then to the Cold List over time.  This tiered organization ensures that access to the Hot List incurs no additional I/O, access to the Warm List incurs only 1 additional I/O, and access to the Cold List incurs 2 or more I/Os. 
 
 ##How do you find similarity?
 Similarity can be found using several algorithms, there are many academic papers available that describe the high order Mathematics on how to do this. In this example, you will use a very simple algorithm using Cosine Similarity to produce a simple score.
@@ -136,8 +138,8 @@ This is a **very elementary** technique and it is useful only as an illustration
  - About 45 minutes
  - A favorite text editor or IDE
  - [JDK 7](http://www.google.com/url?q=http%3A%2F%2Fwww.oracle.com%2Ftechnetwork%2Fjava%2Fjavase%2Fdownloads%2Findex.html&sa=D&sntz=1&usg=AFQjCNGWCcKCIFm3bfDWtU41j6HJzekqNQ) or later
- - [Maven 3.0+](http://maven.apache.org/download.cgi)
- - [Aerospike Java SDK 3.0+](http://www.aerospike.com/aerospike-3-client-sdk/)
+ - [Maven 2](http://maven.apache.org/download.cgi) or later 
+ - [Aerospike Java Client 3.0+](http://www.aerospike.com/docs/client/java/)
  - An Aerospike 3 server installation
  - A MongoDB server installation
  - The test data

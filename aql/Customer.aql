@@ -1,4 +1,0 @@
-show sets
-show indexes
-
-select customerID from test.MOVIE_CUSTOMERS

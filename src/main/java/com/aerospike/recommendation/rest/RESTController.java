@@ -15,9 +15,10 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import com.aerospike.client.AerospikeClient;
-import com.aerospike.client.AerospikeException;
 import com.aerospike.client.Key;
 import com.aerospike.client.Record;
+import com.aerospike.client.Value;
+import com.aerospike.client.large.LargeList;
 import com.aerospike.client.large.LargeStack;
 import com.aerospike.client.policy.Policy;
 import com.mongodb.BasicDBList;
@@ -75,16 +76,19 @@ public class RESTController {
 		/*
 		 * get the latest movies watched and rated by the customer
 		 */
-		LargeStack customerWatched = aerospikeClient.getLargeStack(new Policy(), 
+		LargeList customerWatched = aerospikeClient.getLargeList(null, 
 				new Key(NAME_SPACE, USERS_SET, customerID), 
 				CUSTOMER_WATCHED, null);
-		if (customerWatched == null || customerWatched.size()==0){
+		int size = customerWatched.size();
+		if (customerWatched == null || size==0){
 			// customer Hasen't Watched anything
 			log.debug("No movies found for customer: " + customerID );
 			throw new NoMoviesFound(customerID);
 		}
-
-		List<Map<String, Object>> customerWatchedList = (List<Map<String, Object>>) customerWatched.peek(MOVIE_REVIEW_LIMIT);
+		Value low = Value.get(Math.max(size - MOVIE_REVIEW_LIMIT, 0));
+		Value high = Value.get(size);
+		List<Map<String, Object>> customerWatchedList = (List<Map<String, Object>>) 
+				customerWatched.range(low, high);
 		/*
 		 * build a vector list of movies watched
 		 */
@@ -101,15 +105,16 @@ public class RESTController {
 		 */
 		for (Map<String, Object> wr : customerWatchedList){
 			Key movieKey = new Key(NAME_SPACE, PRODUCT_SET, (String) wr.get(MOVIE_ID) );
-			LargeStack whoWatched = aerospikeClient.getLargeStack(new Policy(), 
+			LargeList whoWatched = aerospikeClient.getLargeList(null, 
 					movieKey, 
 					WATCHED_BY+"List", null);
 			/* 
 			 * Some movies are watched by >100k customers, only look at the last n movies, or the 
 			 * number of customers, whichever is smaller
 			 */
-			
-			List<Map<String, Object>> whoWatchedList = (List<Map<String, Object>>)whoWatched.peek(Math.min(MOVIE_REVIEW_LIMIT, whoWatched.size()));
+			Value watchedHigh = Value.get(whoWatched.size());
+			Value watchedLow = Value.get(Math.max(watchedHigh.toInteger() - MOVIE_REVIEW_LIMIT, 0));
+			List<Map<String, Object>> whoWatchedList = (List<Map<String, Object>>)whoWatched.range(watchedLow, watchedHigh);
 
 			if (!(whoWatchedList == null)){
 				for (Map<String, Object> watchedBy : whoWatchedList){
@@ -118,11 +123,14 @@ public class RESTController {
 						// find user with the highest similarity
 
 						Record similarCustomer = aerospikeClient.get(policy, new Key(NAME_SPACE, USERS_SET, similarCustomerId));
-						LargeStack similarCustomerWatched = aerospikeClient.getLargeStack(new Policy(), 
+						LargeList similarCustomerWatched = aerospikeClient.getLargeList(null, 
 								new Key(NAME_SPACE, USERS_SET, similarCustomerId), 
 								CUSTOMER_WATCHED, null);
+						Value similarHigh = Value.get(similarCustomerWatched.size());
+						Value similarLow = Value.get(Math.max(similarHigh.toInteger() - MOVIE_REVIEW_LIMIT, 0));
 
-						List<Map<String, Object>> similarCustomerWatchedList = (List<Map<String, Object>>) similarCustomerWatched.peek(MOVIE_REVIEW_LIMIT);
+						List<Map<String, Object>> similarCustomerWatchedList = 
+									(List<Map<String, Object>>) similarCustomerWatched.range(similarLow, similarHigh);
 						
 						double score = easySimilarity(thisCustomerMovieVector, similarCustomerWatchedList);
 						if (score > bestScore){
@@ -301,7 +309,7 @@ public class RESTController {
 			else {
 				// Ad the movie ID and rating to the vector
 				movieVector.add(Long.parseLong(movieString)); // Movie ID
-				movieVector.add(Long.parseLong((String)one.get(RATING))); // Customer Rating
+				movieVector.add((Long)one.get(RATING)); // Customer Rating
 			}
 		}
 		return movieVector;

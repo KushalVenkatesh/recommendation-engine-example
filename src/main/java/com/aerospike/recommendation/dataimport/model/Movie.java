@@ -25,8 +25,8 @@ public class Movie implements IRecord {
 	public static final String TITLE = "title";
 	public static final String YEAR_OF_RELEASE = "yearOfRelease";
 	public static final String MOVIE_ID = "movieId";
-	public static final String SUM_OF_RATINGS = "sumOfRatings";
-	public static final String COUNT_OF_RATINGS = "countOfRatings";
+	public static final String SUM_OF_RATINGS = "ratings_sum";
+	public static final String RATINGS_COUNT = "ratings_count";
 	public static final String PRODUCT_SET = "MOVIE_TITLES";
 	String movieId;
 	long yearOfRelease;
@@ -100,7 +100,7 @@ public class Movie implements IRecord {
 	public void fromRecord(Record record) {
 		this.yearOfRelease = (Integer) record.getValue(YEAR_OF_RELEASE);
 		this.title = (String) record.getValue(TITLE);
-		this.countOfRatings = (Integer) record.getValue(COUNT_OF_RATINGS);
+		this.countOfRatings = (Integer) record.getValue(RATINGS_COUNT);
 		this.sumOfRatings = (Integer) record.getValue(SUM_OF_RATINGS);
 		List<WatchedRated> watched =  (List<WatchedRated>) record.getValue(WATCHED_BY);
 		if (watched != null){
@@ -132,8 +132,7 @@ public class Movie implements IRecord {
 				new Bin(MOVIE_ID, Value.get(movieId)),
 				new Bin(YEAR_OF_RELEASE, Value.get(yearOfRelease)),
 				new Bin(TITLE, Value.get(title)),
-				//new Bin(WATCHED_BY, Value.getAsNull()), //Value.getAsList(watchedBy)),
-				new Bin(COUNT_OF_RATINGS, Value.get(countOfRatings)),
+				new Bin(RATINGS_COUNT, Value.get(countOfRatings)),
 				new Bin(SUM_OF_RATINGS, Value.get(sumOfRatings))};
 		return bins;
 	}
@@ -149,7 +148,10 @@ public class Movie implements IRecord {
 	public String toString() {
 		return ("MOVIE [ID=" + this.movieId 
 				+ ", title=" + this.title
-				+ ", year=" + this.yearOfRelease + "]");
+				+ ", year=" + this.yearOfRelease 
+				+ ", count=" + this.countOfRatings 
+				+ ", sum=" + this.sumOfRatings 
+				+ "]");
 	}
 	@SuppressWarnings("unchecked")
 	public JSONObject toJSON() {
@@ -157,6 +159,8 @@ public class Movie implements IRecord {
 		json.put(MOVIE_ID, movieId);
 		json.put(YEAR_OF_RELEASE, yearOfRelease);
 		json.put(TITLE, title);
+		json.put(RATINGS_COUNT, countOfRatings);
+		json.put(SUM_OF_RATINGS, sumOfRatings);
 		if (this.watchedBy != null){
 			JSONArray watched = new JSONArray();
 			watched.addAll(this.watchedBy);
@@ -164,20 +168,27 @@ public class Movie implements IRecord {
 		}
 		return json;
 	}
+	@SuppressWarnings("unchecked")
 	public void fromJSON(JSONObject json){
 		this.movieId = (String) json.get(MOVIE_ID);
 		this.yearOfRelease =  (Long) json.get(YEAR_OF_RELEASE);
 		this.title = (String) json.get(TITLE);
-		//		this.sumOfRatings = (Integer) json.get(SUM_OF_RATINGS);
-		//		this.countOfRatings = (Integer) json.get(COUNT_OF_RATINGS);
 		this.watchedBy = new ArrayList<WatchedRated>();
 		JSONArray watched = (JSONArray) json.get(WATCHED_BY);
+		this.countOfRatings = 0;
+		this.sumOfRatings = 0;
 		if (watched != null){
 			for (Object obj : watched){
 				JSONObject wr = (JSONObject) obj;
+				wr.put("key", this.countOfRatings);
 				WatchedRated watchedRated = new WatchedRated(wr);
 				add(watchedRated);
 			}
 		}
 	}
+	public int getCountOfRatings() {
+		return countOfRatings;
+	}
+	
+	
 }

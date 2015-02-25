@@ -13,13 +13,16 @@ public class Customer implements IRecord {
 	public static final String USERS_SET = "MOVIE_CUSTOMERS";
 	public static final String CUSTOMER_ID = "customerID";
 	public static final String WATCHED = "watched";
+	public static final String RATINGS_COUNT = "ratings_count";
 	String customerId;
-	List<WatchedRated> watched;
+	int ratingsCount = 0;
+	List<WatchedRated> watched = null;
 
 	public Customer(String customerId){
 		super();
 		this.customerId = customerId;
 	}
+	
 	@SuppressWarnings("unchecked")
 	public Customer(String customerId, Record record){
 		this(customerId);
@@ -29,13 +32,14 @@ public class Customer implements IRecord {
 	@SuppressWarnings("unchecked")
 	@Override
 	public void fromRecord(Record record) {
-		List<Map<String, Object>> list = (List<Map<String, Object>>) record.getValue("watched"); 
-		
+		List<Map<String, Object>> list = (List<Map<String, Object>>) record.getValue(WATCHED); 
+		this.ratingsCount = record.getInt(RATINGS_COUNT);
 		this.watched = new ArrayList<WatchedRated>();
-		for (Map<String, Object> map : list){
-			this.watched.add(new WatchedRated(map));
+		if (list != null) {
+			for (Map<String, Object> map : list){
+				this.watched.add(new WatchedRated(map));
+			}
 		}
-
 	}
 	public List<WatchedRated> getWatched() {
 		return watched;
@@ -46,6 +50,16 @@ public class Customer implements IRecord {
 	public String getCustomerId() {
 		return customerId;
 	}
+	public int getRatingsCount() {
+		return ratingsCount;
+	}
+	public void setRatingsCount(int count) {
+		ratingsCount = count;
+	}
+	public int incrementCount() {
+		return ++ratingsCount;
+	}
+
 	@Override
 	public Bin[] asBins() {
 		if (this.watched != null)

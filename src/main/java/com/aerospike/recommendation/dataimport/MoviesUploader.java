@@ -15,9 +15,11 @@ import com.aerospike.client.AerospikeClient;
 import com.aerospike.client.AerospikeException;
 import com.aerospike.client.Bin;
 import com.aerospike.client.Key;
+import com.aerospike.client.Record;
+import com.aerospike.client.ResultCode;
 import com.aerospike.client.Value;
-import com.aerospike.client.large.LargeStack;
-import com.aerospike.client.policy.Policy;
+import com.aerospike.client.large.LargeList;
+import com.aerospike.client.policy.RecordExistsAction;
 import com.aerospike.client.policy.WritePolicy;
 import com.aerospike.recommendation.dataimport.model.Customer;
 import com.aerospike.recommendation.dataimport.model.Movie;
@@ -33,7 +35,6 @@ public class MoviesUploader {
 	private static Logger log = Logger.getLogger(MoviesUploader.class);
 
 	private  AerospikeClient aerospikeClient;
-	private  WritePolicy writePolicy;
 	private  String namespace;
 	private  String customerSet;
 	private  String movieSet;
@@ -47,8 +48,9 @@ public class MoviesUploader {
 	private  DB mongoDB;
 	private  DBCollection movieCollection;
 	private  DBCollection customerCollection;
+	private  WritePolicy insertPolicy;
+	private  WritePolicy updatePolicy;
 
-	private  Policy policy = new Policy();
 	
 
 
@@ -74,7 +76,11 @@ public class MoviesUploader {
 
 		if (aero) {
 			aerospikeClient = new AerospikeClient(host, port);
-			writePolicy = new WritePolicy();
+			insertPolicy = new WritePolicy(aerospikeClient.writePolicyDefault);
+			insertPolicy.recordExistsAction = RecordExistsAction.CREATE_ONLY;
+			updatePolicy = new WritePolicy(aerospikeClient.writePolicyDefault);
+			updatePolicy.recordExistsAction = RecordExistsAction.UPDATE_ONLY;
+			
 			customerSet = Customer.USERS_SET;
 			movieSet = Movie.PRODUCT_SET;
 		}
@@ -85,10 +91,10 @@ public class MoviesUploader {
 			customerCollection = mongoDB.getCollection(Customer.USERS_SET);
 			movieCollection = mongoDB.getCollection(Movie.PRODUCT_SET);
 		}
-		File completed = new File(ratingDir.getAbsolutePath() + "/completed");
-		if (!completed.exists()){
-			completed.mkdirs();
-		}
+//		File completed = new File(ratingDir.getAbsolutePath() + "/completed");
+//		if (!completed.exists()){
+//			completed.mkdirs();
+//		}
 		File[] ratingFiles = ratingDir.listFiles(new FileFilter() {
 
 			@Override
@@ -101,8 +107,8 @@ public class MoviesUploader {
 		for (File ratingFile : ratingFiles){
 			processRatingFile(ratingFile);
 			counter++;
-			String moveCmd = "mv " + ratingFile.getAbsolutePath() + " "+completed.getAbsolutePath() + "/" + ratingFile.getName();
-			Runtime.getRuntime().exec(moveCmd);
+//			String moveCmd = "mv " + ratingFile.getAbsolutePath() + " "+completed.getAbsolutePath() + "/" + ratingFile.getName();
+//			Runtime.getRuntime().exec(moveCmd);
 			if (limit != 0 && counter == limit)
 				break;
 		}
@@ -136,25 +142,30 @@ public class MoviesUploader {
 	}
 
 	private  void saveMovieToAerospike(String nameSpace, String set, Movie movie) throws AerospikeException {
+		int errors = 0, size = 0;
 		Key key =  movie.getKey(nameSpace, set);
-		aerospikeClient.put(writePolicy, 
-				key, 
-				movie.asBins());
-		LargeStack ratings = aerospikeClient.getLargeStack(writePolicy, key, Movie.WATCHED_BY+"List", null);
+		LargeList ratings = aerospikeClient.getLargeList(this.insertPolicy, key, Movie.WATCHED_BY+"List", null);
 		List<WatchedRated> ratingList = movie.getWatchedBy();
-		int count = 0, errors = 0;
-		for (WatchedRated wr : ratingList){
+		size = ratingList.size();
+		try {
 			try {
-				addMovieAeroToCustomer(wr);
-				ratings.push(Value.getAsMap(wr));
-				count++;
+				for (WatchedRated wr : ratingList){
+					ratings.add(Value.getAsMap(wr));
+					addMovieAeroToCustomer(wr);
+				}
+				aerospikeClient.put(this.updatePolicy, 
+						key, 
+						movie.asBins());
 			} catch (AerospikeException e) {
-				log.error(e.getMessage());
-				log.debug(e.getMessage(), e);
-				errors++;
+				if (e.getResultCode() != ResultCode.KEY_EXISTS_ERROR)
+					throw e;
 			}
+		} catch (AerospikeException e) {
+			log.error(e.getMessage());
+			log.debug(e.getMessage(), e);
+			errors++;
 		}
-		log.debug("Aero Ratings " + ratingList.size() + " saved " + count + " with " + errors + " errors");
+		log.debug("Aero Ratings " + size + " saved " + movie.getCountOfRatings() + " with " + errors + " errors");
 	}
 	private  void saveMovieToMongo(JSONObject jsonMovie, Movie movie)  {
 		
@@ -196,7 +207,7 @@ public class MoviesUploader {
 		
 		
 		
-		
+
 	}
 	private  void addMovieAeroToCustomer(WatchedRated wr) throws AerospikeException{
 		Customer customer = null;
@@ -204,23 +215,26 @@ public class MoviesUploader {
 
 		customerID = wr.getCustomerID();
 
+		Record record = aerospikeClient.get(null, new Key(namespace, customerSet, customerID));
+		if (record != null)
+			customer = new Customer(customerID, record);
+		else
+			customer = new Customer(customerID);
 
-		customer = new Customer(customerID);
-		if (!aerospikeClient.exists(writePolicy, 
-				customer.getKey(namespace, customerSet))){
-			aerospikeClient.put(writePolicy, 
-					customer.getKey(namespace, customerSet), 
-					new Bin(Customer.CUSTOMER_ID, Value.get(customerID)));
-			log.trace("New customer id: " + customerID);
-		}
-
-		// create rated stack
-		LargeStack customerRatingStack = aerospikeClient.getLargeStack(writePolicy, 
+		// create rated list
+		LargeList customerRatingList = aerospikeClient.getLargeList(this.updatePolicy, 
 				customer.getKey(namespace, customerSet), 
 				Customer.WATCHED, null);
 		// Add rated movie to stack
-		customerRatingStack.push(Value.getAsMap(wr));
-		log.trace("Added movie " + wr.getMovie() + " to " + customerID);
+		int count = customer.incrementCount();
+		wr.put("key", count);
+		customerRatingList.add(Value.getAsMap(wr));
+		aerospikeClient.put(this.updatePolicy, 
+				customer.getKey(namespace, customerSet), 
+				new Bin(Customer.CUSTOMER_ID, Value.get(customer.getCustomerId())),
+				new Bin(Customer.RATINGS_COUNT, Value.get(customer.getRatingsCount())));
+
+		log.trace("\tAdded movie " + wr.getMovie() + " to " + customerID);
 		customer = null;
 
 	}

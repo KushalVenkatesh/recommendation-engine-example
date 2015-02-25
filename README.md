@@ -105,17 +105,23 @@ Customer ID (primary key) | MOVIES_WATCHED
 String | Large Stack of Ratings (Aerospike), List (MongoDB)
 
 ###Aerospike Large Data Types (LDTs)
-What are [LDTs](http://www.aerospike.com/docs/guide/ldt.html) exactly? Unique to Aerospike, Large Data Types allow individual record Bins (columns or fields) to contain collections of hundreds of thousands of objects (or documents), and they allow these collections to be efficiently stored and processed in-database.  The Aerospike LDT Feature exploits the Aerospike User-Defined Functions mechanism and a new record container type, which we refer to as "sub-records".  Sub-records are very similar to regular Aerospike records, with the main exception that they are linked to a parent record.  They share the same partition address and internal record lock as the parent record, so they move with their parent record during migrations and they are protected under the same isolation mechanism.
+What are [LDTs](http://www.aerospike.com/docs/guide/ldt.html) exactly? Unique to Aerospike, Large Data Types allow individual record Bins (columns or fields) to contain collections of hundreds of thousands of objects (or documents), and they allow these collections to be efficiently stored and processed in-database.  The Aerospike LDT Feature exploits the Aerospike User-Defined Functions mechanism and a new record container type, which we refer to as "sub-records".  
+
+Sub-records are very similar to regular Aerospike records, with the main exception that they are linked to a parent record.  They share the same partition address and internal record lock as the parent record, so they move with their parent record during migrations and they are protected under the same isolation mechanism.
 
 Aerospike large objects are not stored contiguously with the associated record, but instead are split into sub-records (with sizes ranging roughly from 2kb to 32kb), as shown in Figure 1.  The sub-records are indexed, linked together, and managed in-database via User Defined Functions (UDFs). The use of sub-records means that access to an LDT instance typically affects only a single sub-record rather than the entire record bin value. 
 
 ![Record with LDT](Record_with_without_LDT.png)
 
-In this example we are using a Large Stack to store movie recommendations. Large Stack objects (lstack) are particularly suited for tracking current user behavior or time series data like tweet streams, product views, website visits or recommendations made. All recent activity is prepended or pushed on the stack and decisions are made based on processing recent data, in-database. These objects are accessed using client-side lstack functions - push, peek, filter - which in turn call server-side UDFs to read and write data. The push and peek functions can be enhanced to transform values before they are written or filter values before they are returned.  Large Stack Data is pushed onto the top of the stack and, potentially, flows off the end if a fixed capacity is defined.
+In this example we are using a Large List to store movie recommendations.  All recent activity is added to the end of the list and decisions are made based on processing recent data, in-database. These objects are accessed using client-side llist functions - add, range, filter - which in turn call server-side UDFs to read and write data.
 
-![Large Stack](LDT_Record_LStack.png)
+![Large List](LDT_Record_LList.png)
 
-Contents of an lstack are stored in a tiered manner.  There is a "Hot List", which is a list of data items that is stored directly in the parent record.  Access to the hot list is immediate, so there is no additional I/O involved for reading or writing.  The sizes are configurable to match user needs, but the default Hot List size is 100 objects.  The parent record also includes a "Warm List",  which is a list of sub-record pointers.  The default Warm List size is also 100, and the default sub-record capacity is 100, which gives the Warm List a default capacity of 10,000 objects. As is the case with the Hot List, all of these parameters can be set by the administrator for optimal tuning.  Finally the parent record contains a pointer to the cold data directory – a linked list of sub-records containing directories, where each directory contains pointers to data sub-records.  Each Cold List directory node is basically the equivalent of a Warm List.  Stack objects naturally migrate from the Hot List to the Warm List and then to the Cold List over time.  This tiered organization ensures that access to the Hot List incurs no additional I/O, access to the Warm List incurs only 1 additional I/O, and access to the Cold List incurs 2 or more I/Os. 
+The contents of a Large Ordered List are ordered by the type, for example, if the type is Integer, the entries are ordered in increasing numeric order.
+
+What is more interesting is of the entries are a `Map`. If the Map has an element name "key", the the entries are ordered by the value of "key".
+
+In our movie data, each movie will have a rating give by a user. The "key" value will be an increasing counter or index. This way the LList will contain the most recent ratings at the end of the list.
 
 ##How do you find similarity?
 Similarity can be found using several algorithms, there are many academic papers available that describe the high order Mathematics on how to do this. In this example, you will use a very simple algorithm using Cosine Similarity to produce a simple score.
@@ -182,7 +188,7 @@ Install MongoDB using the instructions [Install MongoDB](http://docs.mongodb.org
 ###Step 5:
 The test data is included in the directory `movies`. Each file contains a movie ant its ratings in JSON format. You can load all the movies or just a few. To load the data, run the JAR with the following options:
 ```bash
-java -jar aerospike-recommendation-restful-service-0.5.0.M4.jar -h 192.168.180.140 -m <movies> -db aero
+java -jar aerospike-recommendation-restful-service-1.2.2.BUILD-SNAPSHOT.jar -h 192.168.180.140 -m <movies> -db aero
 ```
 - -h seed host name
 - -p port
@@ -198,7 +204,7 @@ java -jar aerospike-recommendation-restful-service-0.5.0.M4.jar -h 192.168.180.1
 
 At the command prompt, enter the following command to run the packaged application. This application will open the REST service at port 8080.
 ```bash
-java -jar aerospike-recommendation-restful-service-0.5.0.M4.jar -h 192.168.180.147 -db aero
+java -jar aerospike-recommendation-restful-service-1.2.2.BUILD-SNAPSHOT.jar -h 192.168.180.147 -db aero
 ```
 - -h seed host name
 - -p port
@@ -242,22 +248,24 @@ thisUser = client.get(policy, new Key(NAME_SPACE, USERS_SET, customerID));
 Once we have the customer record, we get a list of movies that they have watched. This list is limited by the constant `MOVIE_REVIEW_LIMIT`. 
 ```java
 /*
- * get the movies watched and rated
+ * get the latest movies watched and rated by the customer
  */
-LargeStack customerWatched = aerospikeClient.getLargeStack(new Policy(), 
+LargeList customerWatched = aerospikeClient.getLargeList(null, 
 		new Key(NAME_SPACE, USERS_SET, customerID), 
 		CUSTOMER_WATCHED, null);
-if (customerWatched == null || customerWatched.size()==0){
+int size = customerWatched.size();
+if (customerWatched == null || size==0){
 	// customer Hasen't Watched anything
 	log.debug("No movies found for customer: " + customerID );
 	throw new NoMoviesFound(customerID);
 }
-
+Value low = Value.get(Math.max(size - MOVIE_REVIEW_LIMIT, 0));
+Value high = Value.get(size);
 List<Map<String, Object>> customerWatchedList = 
-			(List<Map<String, Object>>)customerWatched.peek(MOVIE_REVIEW_LIMIT);
+		(List<Map<String, Object>>) customerWatched.range(low, high);
 
 ```
-Then we make a vector from the the list of movies watched.
+Then we make a vector from the list of movies watched.
 ```java
 List<Long> thisCustomerMovieVector = makeVector(customerWatchedList);
 ```
@@ -272,15 +280,16 @@ We then iterate through the movies that the customer has watched, and build a li
  */
 for (Map<String, Object> wr : customerWatchedList){
 	Key movieKey = new Key(NAME_SPACE, PRODUCT_SET, (String) wr.get(MOVIE_ID) );
-	LargeStack whoWatched = aerospikeClient.getLargeStack(new Policy(), 
+	LargeList whoWatched = aerospikeClient.getLargeList(null, 
 			movieKey, 
 			WATCHED_BY+"List", null);
 	/* 
 	 * Some movies are watched by >100k customers, only look at the last n movies, or the 
 	 * number of customers, whichever is smaller
 	 */
-			
-	List<Map<String, Object>> whoWatchedList = (List<Map<String, Object>>)whoWatched.peek(Math.min(MOVIE_REVIEW_LIMIT, whoWatched.size()));
+	Value watchedHigh = Value.get(whoWatched.size());
+	Value watchedLow = Value.get(Math.max(watchedHigh.toInteger() - MOVIE_REVIEW_LIMIT, 0));
+	List<Map<String, Object>> whoWatchedList = (List<Map<String, Object>>)whoWatched.range(watchedLow, watchedHigh);
 
 	if (!(whoWatchedList == null)){
 		for (Map<String, Object> watchedBy : whoWatchedList){
@@ -288,15 +297,15 @@ for (Map<String, Object> wr : customerWatchedList){
 			if (!similarCustomerId.equals(customerID)) {
 				// find user with the highest similarity
 
-				Record similarCustomer = 
-					aerospikeClient.get(policy, new Key(NAME_SPACE, USERS_SET, similarCustomerId));
-				LargeStack similarCustomerWatched = 
-					aerospikeClient.getLargeStack(new Policy(), 
+				Record similarCustomer = aerospikeClient.get(policy, new Key(NAME_SPACE, USERS_SET, similarCustomerId));
+				LargeList similarCustomerWatched = aerospikeClient.getLargeList(null, 
 						new Key(NAME_SPACE, USERS_SET, similarCustomerId), 
 						CUSTOMER_WATCHED, null);
+				Value similarHigh = Value.get(similarCustomerWatched.size());
+				Value similarLow = Value.get(Math.max(similarHigh.toInteger() - MOVIE_REVIEW_LIMIT, 0));
 
-				List<Map<String, Object>> similarCustomerWatchedList =
-					(List<Map<String, Object>>)similarCustomerWatched.peek(MOVIE_REVIEW_LIMIT);
+				List<Map<String, Object>> similarCustomerWatchedList = 
+							(List<Map<String, Object>>) similarCustomerWatched.range(similarLow, similarHigh);
 						
 				double score = easySimilarity(thisCustomerMovieVector, similarCustomerWatchedList);
 				if (score > bestScore){
@@ -307,7 +316,10 @@ for (Map<String, Object> wr : customerWatchedList){
 			}
 		}
 	}
+	whoWatched = null;
 }
+log.debug("Best customer: " + bestMatchedCustomer);
+log.debug("Best score: " + bestScore);
 ```
 Having completed iterating through the list of similar customers you will have the customer with the highest similarity score. We then get the movies that this customer has watched 
 ```java
@@ -319,7 +331,7 @@ for (int recomendedMovieID : bestMatchedPurchases){
 	log.debug("Added Movie key: " + recomendedMovieKeys[index]);
 	index++;
 }
-Record[] recommendedMovies = aerospikeClient.get(policy, recomendedMovieKeys, TITLE, YEAR_OF_RELEASE);
+Record[] recommendedMovies = aerospikeClient.get(null, recomendedMovieKeys, TITLE, YEAR_OF_RELEASE);
 ```
 and return them into a JSON object and return it in the request body.
 ```java

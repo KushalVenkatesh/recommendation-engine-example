@@ -25,9 +25,9 @@ public class WatchedRated implements Map, Comparable<WatchedRated>
 		this();
 		this.properties = map;
 	}
-	@SuppressWarnings("unchecked")
-	public WatchedRated(String movie, String customerID, long rating, String date) {
+	public WatchedRated(long index, String movie, String customerID, long rating, String date) {
 		this();
+		this.properties.put("key", index);
 		this.properties.put(MOVIE_ID, movie);
 		this.properties.put(CUSTOMER_ID, customerID);
 		this.properties.put(RATING, rating);
@@ -36,7 +36,6 @@ public class WatchedRated implements Map, Comparable<WatchedRated>
 	public String getMovie() {
 		return (String) this.properties.get(MOVIE_ID);
 	}
-	@SuppressWarnings("unchecked")
 	public void setMovie(String movie) {
 		this.properties.put(MOVIE_ID, movie);
 	}
@@ -44,7 +43,6 @@ public class WatchedRated implements Map, Comparable<WatchedRated>
 	public String getCustomerID() {
 		return (String) this.properties.get(CUSTOMER_ID);
 	}
-	@SuppressWarnings("unchecked")
 	public void setCustomerID(String movie) {
 		this.properties.put(CUSTOMER_ID, movie);
 	}
@@ -56,7 +54,6 @@ public class WatchedRated implements Map, Comparable<WatchedRated>
 	/**
 	 * @param rating 1-5, 0 means not rated
 	 */
-	@SuppressWarnings("unchecked")
 	public void setRating(int rating) {
 		
 		this.properties.put(RATING, rating);
@@ -67,7 +64,6 @@ public class WatchedRated implements Map, Comparable<WatchedRated>
 	/**
 	 * @param date Format: 2004-07-04
 	 */
-	@SuppressWarnings("unchecked")
 	public void setDate(String date) {
 		this.properties.put(DATE, date);
 	}
@@ -86,7 +82,7 @@ public class WatchedRated implements Map, Comparable<WatchedRated>
 	
 	@Override
 	public String toString() {
-		return "WatchedRated [" +  this.getMovie() + "," 
+		return "WatchedRated [" + this.get("key") + ","  +  this.getMovie() + "," 
 				+ this.getCustomerID() + "," 
 				+ this.getRating() + "," 
 				+ this.getDate() +"]";

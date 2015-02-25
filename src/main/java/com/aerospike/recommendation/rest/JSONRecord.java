@@ -21,13 +21,14 @@ public class JSONRecord extends JSONObject {
 		put("generation", record.generation);
 		put("expiration", record.expiration);
 		put("bins", new JSONObject(record.bins));
-		if (record.duplicates != null){
-			JSONArray duplicates = new JSONArray();
-			for (Map<String, Object> duplicate : record.duplicates){
-				duplicates.add(new JSONObject(duplicate));
-			}
-			put("duplicates", duplicates);
-		}
+// record.duplicates no londer supported		
+//		if (record.duplicates != null){
+//			JSONArray duplicates = new JSONArray();
+//			for (Map<String, Object> duplicate : record.duplicates){
+//				duplicates.add(new JSONObject(duplicate));
+//			}
+//			put("duplicates", duplicates);
+//		}
 	}
 
 }

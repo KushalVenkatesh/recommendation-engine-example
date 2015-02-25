@@ -7,23 +7,20 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>0.5.0.M4</version>
+		<version>1.2.2.BUILD-SNAPSHOT</version>
 	</parent>
 
 	<dependencies>
+		<!-- Spring -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 		<!-- Aerospike client. -->
 		<dependency>
 			<groupId>com.aerospike</groupId>
 			<artifactId>aerospike-client</artifactId>
-			<version>3.0.30</version>
+			<version>[3.0.35,)</version>
 		</dependency>
 		<!-- MongoDB driver. -->
 		<dependency>
@@ -43,18 +40,6 @@
 			<artifactId>log4j</artifactId>
 			<version>1.2.14</version>
 		</dependency>
-		<!-- Spring -->
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-web</artifactId>
-			<version>0.5.0.M1</version>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-actuator</artifactId>
-			<version>0.5.0.M1</version>
-		</dependency>
-		
 		<!-- JSON simple -->
 		<dependency>
 			<groupId>com.googlecode.json-simple</groupId>
@@ -76,7 +61,6 @@
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
-				<version>0.5.0.M1</version>
 			</plugin>
 		</plugins>
 		<resources>
@@ -88,7 +72,7 @@
 			</resource>
 		</resources>
 	</build>
-
+	 
 	<repositories>
 		<repository>
 			<id>spring-snapshots</id>
@@ -109,6 +93,7 @@
 			</snapshots>
 		</pluginRepository>
 	</pluginRepositories>
+	
 	<organization>
 		<name>Aerospike Inc</name>
 		<url>Http://www.aerospike.com</url>

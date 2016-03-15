@@ -63,7 +63,7 @@ public class Customer implements IRecord {
 	@Override
 	public Bin[] asBins() {
 		if (this.watched != null)
-			return new Bin[] {Bin.asList("watched", this.watched)};
+			return new Bin[] {new Bin("watched", this.watched)};
 		else
 			return new Bin[0];
 	}

@@ -150,7 +150,7 @@ public class MoviesUploader {
 		try {
 			try {
 				for (WatchedRated wr : ratingList){
-					ratings.add(Value.getAsMap(wr));
+					ratings.add(Value.get(wr));
 					addMovieAeroToCustomer(wr);
 				}
 				aerospikeClient.put(this.updatePolicy, 
@@ -228,7 +228,7 @@ public class MoviesUploader {
 		// Add rated movie to stack
 		int count = customer.incrementCount();
 		wr.put("key", count);
-		customerRatingList.add(Value.getAsMap(wr));
+		customerRatingList.add(Value.get(wr));
 		aerospikeClient.put(this.updatePolicy, 
 				customer.getKey(namespace, customerSet), 
 				new Bin(Customer.CUSTOMER_ID, Value.get(customer.getCustomerId())),
